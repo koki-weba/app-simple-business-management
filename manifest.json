@@ -1,0 +1,26 @@
+{
+  "name": "起業ロードマップ管理",
+  "short_name": "起業管理",
+  "description": "5期間・月商60万への起業ロードマップを管理するPWA",
+  "start_url": "./index.html",
+  "scope": "./",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#f8fafc",
+  "theme_color": "#2563eb",
+  "lang": "ja",
+  "icons": [
+    {
+      "src": "icons/icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any"
+    },
+    {
+      "src": "icons/icon.svg",
+      "sizes": "512x512",
+      "type": "image/svg+xml",
+      "purpose": "maskable"
+    }
+  ]
+}

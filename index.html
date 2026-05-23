@@ -1,0 +1,356 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover, maximum-scale=1.0, user-scalable=no" />
+  <meta name="theme-color" content="#2563eb" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="default" />
+  <meta name="apple-mobile-web-app-title" content="起業管理" />
+  <meta name="description" content="5期間の起業ロードマップ・KPI・営業・クライアントを一元管理するPWA" />
+  <link rel="manifest" href="manifest.json" />
+  <link rel="icon" type="image/svg+xml" href="icons/icon.svg" />
+  <link rel="apple-touch-icon" href="icons/icon.svg" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=DM+Sans:ital,opsz,wght@0,9..40,400;0,9..40,500;0,9..40,600;0,9..40,700;1,9..40,400&family=Noto+Sans+JP:wght@400;500;600;700&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="styles.css" />
+  <title>起業ロードマップ | Startup Roadmap</title>
+</head>
+<body>
+  <div class="app-shell">
+    <header class="app-header">
+      <div class="header-inner">
+        <div class="brand">
+          <div class="brand-logo" aria-hidden="true">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M3 17l6-6 4 4 8-10"/><path d="M14 5h7v7"/>
+            </svg>
+          </div>
+          <div class="brand-text">
+            <h1 id="page-title">ホーム</h1>
+            <p id="page-subtitle">2026.05 — 2028.03 ロードマップ</p>
+          </div>
+        </div>
+        <button type="button" class="icon-btn" id="notifBtn" aria-label="今月のフォーカス">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg>
+        </button>
+      </div>
+      <div class="phase-strip" id="phaseStrip" aria-hidden="true"></div>
+    </header>
+
+    <main class="app-main" id="appMain">
+      <!-- HOME -->
+      <section class="view view-home active" data-view="home">
+        <div class="card hero-card animate-in">
+          <div class="hero-grid">
+            <div class="hero-copy">
+              <span class="eyebrow" id="heroPhaseLabel">第1期</span>
+              <h2 class="hero-metric" id="heroRevenuePct">0%</h2>
+              <p class="hero-sub" id="heroRevenueSub">最終目標 月商60万円 への進捗</p>
+              <div class="hero-chips" id="heroChips"></div>
+            </div>
+            <div class="ring-wrap">
+              <svg class="ring" viewBox="0 0 120 120" aria-hidden="true">
+                <circle class="ring-bg" cx="60" cy="60" r="52"/>
+                <circle class="ring-fg" id="heroRing" cx="60" cy="60" r="52"/>
+              </svg>
+              <span class="ring-label" id="heroRingLabel">0%</span>
+            </div>
+          </div>
+        </div>
+
+        <div class="stat-row animate-in" style="--delay: 0.05s">
+          <div class="stat-card">
+            <span class="stat-label">今月売上</span>
+            <strong class="stat-value" id="statMonthRevenue">--</strong>
+            <span class="stat-meta" id="statMonthTarget">目標 --</span>
+          </div>
+          <div class="stat-card">
+            <span class="stat-label">継続収益</span>
+            <strong class="stat-value" id="statRecurring">--</strong>
+            <span class="stat-meta" id="statRecurringCount">0社</span>
+          </div>
+          <div class="stat-card">
+            <span class="stat-label">今週DM</span>
+            <strong class="stat-value" id="statWeekDm">0</strong>
+            <span class="stat-meta" id="statWeekDmGoal">/ 50件</span>
+          </div>
+        </div>
+
+        <div class="card animate-in" style="--delay: 0.1s">
+          <div class="card-head">
+            <h3>今月のフォーカス</h3>
+            <span class="badge" id="currentMonthBadge">5月</span>
+          </div>
+          <p class="focus-title" id="focusTitle">--</p>
+          <ul class="focus-list" id="focusActions"></ul>
+        </div>
+
+        <div class="card animate-in" style="--delay: 0.15s">
+          <div class="card-head">
+            <h3>クイック記録</h3>
+          </div>
+          <div class="quick-grid">
+            <button type="button" class="quick-btn" data-quick="dm">
+              <span class="quick-icon">📨</span>
+              <span>DM +1</span>
+            </button>
+            <button type="button" class="quick-btn" data-quick="revenue">
+              <span class="quick-icon">💴</span>
+              <span>売上入力</span>
+            </button>
+            <button type="button" class="quick-btn" data-quick="client">
+              <span class="quick-icon">🤝</span>
+              <span>案件追加</span>
+            </button>
+            <button type="button" class="quick-btn" data-quick="task">
+              <span class="quick-icon">✓</span>
+              <span>タスク完了</span>
+            </button>
+          </div>
+        </div>
+
+        <div class="card animate-in" style="--delay: 0.2s">
+          <div class="card-head">
+            <h3>マイルストーン</h3>
+            <span class="muted" id="milestoneProgress">0/0</span>
+          </div>
+          <div class="milestone-preview" id="milestonePreview"></div>
+        </div>
+      </section>
+
+      <!-- ROADMAP -->
+      <section class="view view-roadmap" data-view="roadmap">
+        <div class="card intro-card animate-in">
+          <h3>5期間ロードマップ</h3>
+          <p>2026年5月から2028年3月まで、0→1・単価UP・ストック収益・外注化・月商60万を段階的に達成します。</p>
+          <div class="timeline-bar" id="timelineBar"></div>
+        </div>
+        <div id="roadmapPhases" class="roadmap-list"></div>
+      </section>
+
+      <!-- KPI -->
+      <section class="view view-kpi" data-view="kpi">
+        <div class="card animate-in">
+          <div class="card-head">
+            <h3>月次KPI</h3>
+            <button type="button" class="btn btn-primary btn-sm" id="addRecordBtn">+ 記録</button>
+          </div>
+          <div class="chart-wrap">
+            <canvas id="revenueChart" aria-label="月次売上グラフ"></canvas>
+          </div>
+          <div class="seg-group" id="chartRangeSeg">
+            <button type="button" class="seg-btn active" data-range="6">6ヶ月</button>
+            <button type="button" class="seg-btn" data-range="12">12ヶ月</button>
+            <button type="button" class="seg-btn" data-range="24">全期間</button>
+          </div>
+        </div>
+        <div class="card animate-in">
+          <h3>記録一覧</h3>
+          <div id="recordsList" class="records-list"></div>
+        </div>
+        <div class="card animate-in">
+          <h3>手取りシミュレーション</h3>
+          <p class="muted small">売上の約67%を手取り目安として表示（税・経費は設定で調整可）</p>
+          <div class="sim-row">
+            <label>今月売上（円）</label>
+            <input type="number" id="simRevenue" class="input" min="0" step="1000" />
+          </div>
+          <div class="sim-row">
+            <label>手取り率（%）</label>
+            <input type="range" id="simRate" min="40" max="90" value="67" />
+            <span id="simRateLabel">67%</span>
+          </div>
+          <p class="sim-result">推定手取り: <strong id="simTakeHome">--</strong></p>
+        </div>
+      </section>
+
+      <!-- SALES -->
+      <section class="view view-sales" data-view="sales">
+        <div class="card dm-card animate-in">
+          <div class="card-head">
+            <h3>DM送信トラッカー</h3>
+            <span class="badge badge-blue" id="dmTodayBadge">今日 0/10</span>
+          </div>
+          <div class="dm-counter">
+            <button type="button" class="dm-btn dm-minus" id="dmMinus" aria-label="DM減らす">−</button>
+            <div class="dm-display">
+              <span class="dm-num" id="dmTodayCount">0</span>
+              <span class="dm-label">今日の送信数</span>
+            </div>
+            <button type="button" class="dm-btn dm-plus" id="dmPlus" aria-label="DM追加">+</button>
+          </div>
+          <div class="progress-line">
+            <div class="progress-fill" id="dmWeekBar" style="width:0%"></div>
+          </div>
+          <p class="muted small" id="dmWeekText">今週 0 / 50 件</p>
+        </div>
+
+        <div class="card animate-in">
+          <div class="card-head">
+            <h3>DMテンプレート</h3>
+          </div>
+          <div id="dmTemplates" class="template-list"></div>
+        </div>
+
+        <div class="card animate-in">
+          <div class="card-head">
+            <h3>営業ログ</h3>
+            <button type="button" class="btn btn-ghost btn-sm" id="addSalesLogBtn">+ ログ</button>
+          </div>
+          <div id="salesLogList" class="log-list"></div>
+        </div>
+      </section>
+
+      <!-- CLIENTS -->
+      <section class="view view-clients" data-view="clients">
+        <div class="card animate-in">
+          <div class="card-head">
+            <h3>クライアント・案件</h3>
+            <button type="button" class="btn btn-primary btn-sm" id="addClientBtn">+ 追加</button>
+          </div>
+          <div class="client-summary" id="clientSummary"></div>
+        </div>
+        <div id="clientList" class="client-list"></div>
+        <div class="card animate-in">
+          <h3>お客様の声</h3>
+          <div id="testimonialList" class="testimonial-list"></div>
+        </div>
+      </section>
+
+      <!-- TASKS -->
+      <section class="view view-tasks" data-view="tasks">
+        <div class="card animate-in">
+          <div class="card-head">
+            <h3>タスク</h3>
+            <button type="button" class="btn btn-ghost btn-sm" id="addTaskBtn">+ 追加</button>
+          </div>
+          <div class="filter-chips" id="taskFilters">
+            <button type="button" class="chip active" data-filter="all">すべて</button>
+            <button type="button" class="chip" data-filter="sales">営業</button>
+            <button type="button" class="chip" data-filter="delivery">納品</button>
+            <button type="button" class="chip" data-filter="retention">継続</button>
+            <button type="button" class="chip" data-filter="product">プロダクト</button>
+          </div>
+          <div id="taskList" class="task-list"></div>
+        </div>
+        <div class="card animate-in">
+          <div class="card-head">
+            <h3>戦略メモ</h3>
+            <button type="button" class="btn btn-ghost btn-sm" id="addNoteBtn">+ メモ</button>
+          </div>
+          <div id="notesList" class="notes-list"></div>
+        </div>
+      </section>
+
+      <!-- SETTINGS -->
+      <section class="view view-settings" data-view="settings">
+        <div class="card animate-in">
+          <h3>プロフィール</h3>
+          <label class="field">
+            <span>名前</span>
+            <input type="text" id="profileName" class="input" placeholder="例：山田" />
+          </label>
+          <label class="field">
+            <span>事業名</span>
+            <input type="text" id="profileBusiness" class="input" />
+          </label>
+          <label class="field">
+            <span>モットー</span>
+            <input type="text" id="profileMotto" class="input" />
+          </label>
+        </div>
+        <div class="card animate-in">
+          <h3>目標設定</h3>
+          <label class="field">
+            <span>最終月商目標（円）</span>
+            <input type="number" id="settingUltimate" class="input" min="0" step="10000" />
+          </label>
+          <label class="field">
+            <span>手取り目標（円）</span>
+            <input type="number" id="settingTakeHome" class="input" min="0" step="10000" />
+          </label>
+          <label class="field">
+            <span>DM 1日の目標</span>
+            <input type="number" id="settingDmDaily" class="input" min="1" max="100" />
+          </label>
+          <label class="field">
+            <span>DM 1週間の目標</span>
+            <input type="number" id="settingDmWeekly" class="input" min="1" max="500" />
+          </label>
+          <button type="button" class="btn btn-primary btn-block" id="saveSettingsBtn">設定を保存</button>
+        </div>
+        <div class="card animate-in">
+          <h3>データ管理</h3>
+          <p class="muted small">アプリを更新しても、下記のエクスポートデータまたは端末内ストレージで記録は維持されます。</p>
+          <div class="btn-row">
+            <button type="button" class="btn btn-ghost" id="exportBtn">エクスポート</button>
+            <label class="btn btn-ghost">
+              インポート
+              <input type="file" id="importFile" accept="application/json" hidden />
+            </label>
+          </div>
+          <button type="button" class="btn btn-danger btn-block" id="resetDataBtn">全データをリセット</button>
+        </div>
+        <div class="card animate-in install-card" id="installCard" hidden>
+          <h3>ホーム画面に追加</h3>
+          <p>スマホで「ホーム画面に追加」するとアプリのように使えます。</p>
+          <button type="button" class="btn btn-primary btn-block" id="installBtn">インストール</button>
+        </div>
+        <p class="version-tag">起業ロードマップ v3 · データキー独立保存</p>
+      </section>
+    </main>
+
+    <nav class="bottom-nav" id="bottomNav" aria-label="メインナビゲーション">
+      <button type="button" class="nav-btn active" data-nav="home" aria-current="page">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 9.5 12 3l9 6.5V20a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1V9.5z"/><path d="M9 21V12h6v9"/></svg>
+        <span>ホーム</span>
+      </button>
+      <button type="button" class="nav-btn" data-nav="roadmap">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 3v18h18"/><path d="M7 15l4-6 4 3 5-8"/></svg>
+        <span>計画</span>
+      </button>
+      <button type="button" class="nav-btn" data-nav="kpi">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 19V5M10 19V9M16 19v-6M22 19V3"/></svg>
+        <span>KPI</span>
+      </button>
+      <button type="button" class="nav-btn" data-nav="sales">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
+        <span>営業</span>
+      </button>
+      <button type="button" class="nav-btn" data-nav="clients">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75"/></svg>
+        <span>案件</span>
+      </button>
+      <button type="button" class="nav-btn" data-nav="tasks">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg>
+        <span>タスク</span>
+      </button>
+      <button type="button" class="nav-btn" data-nav="settings">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M12 1v2M12 21v2M4.22 4.22l1.42 1.42M18.36 18.36l1.42 1.42M1 12h2M21 12h2M4.22 19.78l1.42-1.42M18.36 5.64l1.42-1.42"/></svg>
+        <span>設定</span>
+      </button>
+      <span class="nav-indicator" id="navIndicator" aria-hidden="true"></span>
+    </nav>
+  </div>
+
+  <!-- Modal -->
+  <div class="modal-backdrop" id="modalBackdrop" hidden>
+    <div class="modal" role="dialog" aria-modal="true" aria-labelledby="modalTitle">
+      <div class="modal-head">
+        <h2 id="modalTitle">入力</h2>
+        <button type="button" class="icon-btn modal-close" id="modalClose" aria-label="閉じる">×</button>
+      </div>
+      <div class="modal-body" id="modalBody"></div>
+      <div class="modal-foot" id="modalFoot"></div>
+    </div>
+  </div>
+
+  <div class="toast" id="toast" role="status" aria-live="polite"></div>
+
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+  <script src="defaults.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>
