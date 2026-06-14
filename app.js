@@ -4,7 +4,7 @@
 
   const D = window.StartupDefaults;
   const STORAGE_KEY = D.STORAGE_KEY;
-  const APP_VERSION = 8;
+  const APP_VERSION = 9;
   const CIRC = 326.7;
 
   const PAGE_META = {

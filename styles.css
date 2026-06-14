@@ -630,7 +630,7 @@ body {
 
 .action-list.check-list li,
 .focus-list.check-list li {
-  padding: 8px 0;
+  padding: 6px 0;
   padding-left: 0;
 }
 
@@ -642,23 +642,49 @@ body {
 .month-task-row {
   display: flex;
   align-items: flex-start;
-  gap: 10px;
+  gap: 6px;
   cursor: pointer;
   width: 100%;
+  min-height: 1.5em;
 }
 
 .month-task-check {
-  width: 20px;
-  height: 20px;
-  margin-top: 2px;
-  accent-color: var(--blue-600);
+  appearance: none;
+  -webkit-appearance: none;
+  width: 12px;
+  height: 12px;
+  margin-top: 3px;
+  border: 1.5px solid var(--slate-400);
+  border-radius: 2px;
+  background: var(--white);
   flex-shrink: 0;
   cursor: pointer;
+  position: relative;
+  padding: 0;
+}
+
+.month-task-check:checked {
+  background: var(--blue-600);
+  border-color: var(--blue-600);
+}
+
+.month-task-check:checked::after {
+  content: "✓";
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--white);
+  font-size: 0.55rem;
+  font-weight: 700;
+  line-height: 1;
 }
 
 .month-task-text {
   flex: 1;
   line-height: 1.5;
+  font-size: 0.8rem;
 }
 
 .month-task-text.done {
