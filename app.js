@@ -670,9 +670,9 @@
             <h5><span>${escapeHtml(month.label)}</span>${escapeHtml(month.title)}</h5>
             <button type="button" class="icon-action" data-edit-month="${m.key}" title="月次計画を編集">✎</button>
           </div>
-          <p class="muted small">行動</p>
+          <p class="muted small">タスク</p>
           <ul class="action-list">${month.actions.map((a) => `<li>${escapeHtml(a)}</li>`).join("")}</ul>
-          <p class="muted small">成果</p>
+          <p class="muted small">達成</p>
           <ul class="outcome-list">${month.outcomes.map((o) => `<li>${escapeHtml(o)}</li>`).join("")}</ul>
         </div>`;
           })
@@ -1021,8 +1021,8 @@
       `
       <label class="field"><span>月ラベル（例：5月）</span><input type="text" id="mpLabel" class="input" value="${escapeHtml(resolved.month.label)}" /></label>
       <label class="field"><span>タイトル</span><input type="text" id="mpTitle" class="input" value="${escapeHtml(resolved.month.title)}" /></label>
-      <label class="field"><span>行動（1行1項目）</span><textarea id="mpActions" class="input" rows="4">${escapeHtml(resolved.month.actions.join("\n"))}</textarea></label>
-      <label class="field"><span>成果（1行1項目）</span><textarea id="mpOutcomes" class="input" rows="3">${escapeHtml(resolved.month.outcomes.join("\n"))}</textarea></label>
+      <label class="field"><span>タスク（1行1項目）</span><textarea id="mpActions" class="input" rows="4">${escapeHtml(resolved.month.actions.join("\n"))}</textarea></label>
+      <label class="field"><span>達成（1行1項目）</span><textarea id="mpOutcomes" class="input" rows="3">${escapeHtml(resolved.month.outcomes.join("\n"))}</textarea></label>
       <label class="field"><span>月商目標（円・空欄でデフォルト）</span><input type="number" id="mpTarget" class="input" min="0" step="1000" value="${data.monthTargetOverrides[monthKey] ?? ""}" placeholder="${base ? getMonthTarget(monthKey) : ""}" /></label>
       <label style="display:flex;align-items:center;gap:8px;font-size:0.88rem;margin-top:8px;">
         <input type="checkbox" id="mpHidden" ${resolved.month.hidden ? "checked" : ""} />
