@@ -2,7 +2,7 @@
 (() => {
   "use strict";
 
-  const SCHEMA_VERSION = 3;
+  const SCHEMA_VERSION = 4;
   const STORAGE_KEY = "startupRoadmap_userData_v3";
   const META_KEY = "startupRoadmap_meta_v3";
 
@@ -424,6 +424,7 @@
         ultimateTakeHome: ULTIMATE.takeHome,
         dmDailyGoal: 10,
         dmWeeklyGoal: 50,
+        defaultTakeHomeRate: 67,
       },
       milestones: milestoneState,
       monthlyRecords: [],
@@ -441,6 +442,15 @@
       customTasks: [],
       notes: [],
       journal: [],
+      trash: [],
+      archives: [],
+      monthOverrides: {},
+      monthTargetOverrides: {},
+      milestoneOverrides: {},
+      customMilestones: [],
+      customDmTemplates: [],
+      hiddenDmTemplateIds: [],
+      deletedDefaultTaskIds: [],
     };
   }
 
@@ -450,8 +460,21 @@
 
     const out = { ...base, ...saved, schemaVersion: SCHEMA_VERSION };
 
+    out.trash = Array.isArray(saved.trash) ? saved.trash : [];
+    out.archives = Array.isArray(saved.archives) ? saved.archives : [];
+    out.monthOverrides = saved.monthOverrides && typeof saved.monthOverrides === "object" ? saved.monthOverrides : {};
+    out.monthTargetOverrides =
+      saved.monthTargetOverrides && typeof saved.monthTargetOverrides === "object" ? saved.monthTargetOverrides : {};
+    out.milestoneOverrides =
+      saved.milestoneOverrides && typeof saved.milestoneOverrides === "object" ? saved.milestoneOverrides : {};
+    out.customMilestones = Array.isArray(saved.customMilestones) ? saved.customMilestones : [];
+    out.customDmTemplates = Array.isArray(saved.customDmTemplates) ? saved.customDmTemplates : [];
+    out.hiddenDmTemplateIds = Array.isArray(saved.hiddenDmTemplateIds) ? saved.hiddenDmTemplateIds : [];
+    out.deletedDefaultTaskIds = Array.isArray(saved.deletedDefaultTaskIds) ? saved.deletedDefaultTaskIds : [];
+
     out.profile = { ...base.profile, ...(saved.profile || {}) };
     out.settings = { ...base.settings, ...(saved.settings || {}) };
+    if (out.settings.defaultTakeHomeRate == null) out.settings.defaultTakeHomeRate = 67;
 
     const mergedMilestones = { ...base.milestones };
     if (saved.milestones) {

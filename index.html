@@ -14,10 +14,15 @@
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=DM+Sans:ital,opsz,wght@0,9..40,400;0,9..40,500;0,9..40,600;0,9..40,700;1,9..40,400&family=Noto+Sans+JP:wght@400;500;600;700&display=swap" rel="stylesheet" />
-  <link rel="stylesheet" href="styles.css" />
+  <link rel="stylesheet" href="styles.css?v=5" />
   <title>起業ロードマップ | Startup Roadmap</title>
 </head>
 <body>
+  <div class="update-banner" id="updateBanner" hidden role="alert">
+    <p id="updateBannerText">新しいバージョンがあります</p>
+    <button type="button" class="btn btn-primary btn-sm" id="updateAppBtn">更新する</button>
+    <button type="button" class="icon-btn update-dismiss" id="dismissUpdateBtn" aria-label="閉じる">×</button>
+  </div>
   <div class="app-shell">
     <header class="app-header">
       <div class="header-inner">
@@ -81,7 +86,10 @@
         <div class="card animate-in" style="--delay: 0.1s">
           <div class="card-head">
             <h3>今月のフォーカス</h3>
-            <span class="badge" id="currentMonthBadge">5月</span>
+            <div class="head-actions">
+              <span class="badge" id="currentMonthBadge">5月</span>
+              <button type="button" class="btn btn-ghost btn-sm" id="editFocusBtn" title="今月の計画を編集">編集</button>
+            </div>
           </div>
           <p class="focus-title" id="focusTitle">--</p>
           <ul class="focus-list" id="focusActions"></ul>
@@ -147,7 +155,10 @@
           </div>
         </div>
         <div class="card animate-in">
-          <h3>記録一覧</h3>
+          <div class="card-head">
+            <h3>記録一覧</h3>
+            <button type="button" class="btn btn-ghost btn-sm" id="editMonthTargetBtn">月別目標</button>
+          </div>
           <div id="recordsList" class="records-list"></div>
         </div>
         <div class="card animate-in">
@@ -190,6 +201,7 @@
         <div class="card animate-in">
           <div class="card-head">
             <h3>DMテンプレート</h3>
+            <button type="button" class="btn btn-ghost btn-sm" id="addDmTemplateBtn">+ 追加</button>
           </div>
           <div id="dmTemplates" class="template-list"></div>
         </div>
@@ -282,8 +294,17 @@
           <button type="button" class="btn btn-primary btn-block" id="saveSettingsBtn">設定を保存</button>
         </div>
         <div class="card animate-in">
+          <h3>アプリの更新</h3>
+          <p class="muted small">ホーム画面に追加済みの場合、古いキャッシュが残ることがあります。「最新版を確認」で更新を取得してください。</p>
+          <p class="version-line">現在のバージョン: <strong id="appVersionLabel">v5</strong></p>
+          <div class="btn-row">
+            <button type="button" class="btn btn-primary" id="checkUpdateBtn">最新版を確認</button>
+            <button type="button" class="btn btn-ghost" id="forceUpdateBtn">キャッシュを消去</button>
+          </div>
+        </div>
+        <div class="card animate-in">
           <h3>データ管理</h3>
-          <p class="muted small">アプリを更新しても、下記のエクスポートデータまたは端末内ストレージで記録は維持されます。</p>
+          <p class="muted small">削除した項目はゴミ箱から復元できます。リセット前は自動でアーカイブが作成されます。</p>
           <div class="btn-row">
             <button type="button" class="btn btn-ghost" id="exportBtn">エクスポート</button>
             <label class="btn btn-ghost">
@@ -293,12 +314,27 @@
           </div>
           <button type="button" class="btn btn-danger btn-block" id="resetDataBtn">全データをリセット</button>
         </div>
+        <div class="card animate-in">
+          <div class="card-head">
+            <h3>ゴミ箱</h3>
+            <button type="button" class="btn btn-ghost btn-sm" id="emptyTrashBtn">空にする</button>
+          </div>
+          <p class="muted small" id="trashSummary">削除した項目はここから復元できます</p>
+          <div id="trashList" class="trash-list"></div>
+        </div>
+        <div class="card animate-in">
+          <div class="card-head">
+            <h3>アーカイブ</h3>
+          </div>
+          <p class="muted small">リセット直前のデータスナップショット。復元すると現在のデータはアーカイブに退避されます。</p>
+          <div id="archiveList" class="archive-list"></div>
+        </div>
         <div class="card animate-in install-card" id="installCard" hidden>
           <h3>ホーム画面に追加</h3>
           <p>スマホで「ホーム画面に追加」するとアプリのように使えます。</p>
           <button type="button" class="btn btn-primary btn-block" id="installBtn">インストール</button>
         </div>
-        <p class="version-tag">起業ロードマップ v3 · データキー独立保存</p>
+        <p class="version-tag">起業ロードマップ v5 · 編集・削除・復元対応</p>
       </section>
     </main>
 
@@ -347,10 +383,13 @@
     </div>
   </div>
 
-  <div class="toast" id="toast" role="status" aria-live="polite"></div>
+  <div class="toast" id="toast" role="status" aria-live="polite">
+    <span id="toastMsg"></span>
+    <button type="button" class="toast-undo" id="toastUndoBtn" hidden>元に戻す</button>
+  </div>
 
   <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
-  <script src="defaults.js"></script>
-  <script src="app.js"></script>
+  <script src="defaults.js?v=5"></script>
+  <script src="app.js?v=5"></script>
 </body>
 </html>

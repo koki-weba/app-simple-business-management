@@ -4,6 +4,7 @@
 
   const D = window.StartupDefaults;
   const STORAGE_KEY = D.STORAGE_KEY;
+  const APP_VERSION = 5;
   const CIRC = 326.7;
 
   const PAGE_META = {
@@ -21,6 +22,22 @@
   let revenueChart = null;
   let taskFilter = "all";
   let deferredInstall = null;
+  let undoCallback = null;
+  let swRegistration = null;
+  let swReloading = false;
+
+  const ENTITY_LABELS = {
+    client: "案件",
+    customTask: "タスク",
+    defaultTask: "タスク",
+    note: "メモ",
+    salesLog: "営業ログ",
+    monthlyRecord: "月次記録",
+    customMilestone: "マイルストーン",
+    customDmTemplate: "DMテンプレート",
+    monthOverride: "月次計画",
+    monthTarget: "月別目標",
+  };
 
   const $ = (sel) => document.querySelector(sel);
   const $$ = (sel) => document.querySelectorAll(sel);
@@ -68,6 +85,202 @@
     if (render) renderAll();
   }
 
+  /* ── 可逆性: ゴミ箱・アーカイブ・マージ ── */
+  function deepClone(obj) {
+    return JSON.parse(JSON.stringify(obj));
+  }
+
+  function resolveMonth(monthKey) {
+    const plan = D.getMonthPlan(monthKey);
+    if (!plan) return null;
+    const ov = data.monthOverrides[monthKey] || {};
+    return {
+      phase: plan.phase,
+      month: {
+        ...plan.month,
+        title: ov.title != null ? ov.title : plan.month.title,
+        actions: ov.actions != null ? ov.actions : plan.month.actions,
+        outcomes: ov.outcomes != null ? ov.outcomes : plan.month.outcomes,
+      },
+    };
+  }
+
+  function resolvePhaseMilestones(phase) {
+    const defaults = phase.milestones
+      .filter((m) => !data.milestoneOverrides[m.id]?.hidden)
+      .map((m) => ({
+        id: m.id,
+        text: data.milestoneOverrides[m.id]?.text ?? m.text,
+        isCustom: false,
+        done: !!data.milestones[m.id]?.done,
+        doneAt: data.milestones[m.id]?.doneAt ?? null,
+      }));
+    const custom = data.customMilestones
+      .filter((m) => m.phaseId === phase.id)
+      .map((m) => ({
+        id: m.id,
+        text: m.text,
+        isCustom: true,
+        done: !!m.done,
+        doneAt: m.doneAt ?? null,
+      }));
+    return [...defaults, ...custom];
+  }
+
+  function getActiveTasks() {
+    return [
+      ...data.tasks.filter((t) => !data.deletedDefaultTaskIds.includes(t.id)),
+      ...data.customTasks,
+    ];
+  }
+
+  function findTask(id) {
+    return data.tasks.find((t) => t.id === id) || data.customTasks.find((t) => t.id === id);
+  }
+
+  function isDefaultTask(id) {
+    return data.tasks.some((t) => t.id === id);
+  }
+
+  function getDmTemplatesList() {
+    const defaults = D.DM_TEMPLATES.filter((t) => !data.hiddenDmTemplateIds.includes(t.id)).map((t) => ({
+      ...t,
+      isCustom: false,
+    }));
+    const custom = data.customDmTemplates.map((t) => ({ ...t, isCustom: true }));
+    return [...defaults, ...custom];
+  }
+
+  function addToTrash(entityType, item, label) {
+    data.trash.unshift({
+      trashId: uid(),
+      entityType,
+      item: deepClone(item),
+      deletedAt: new Date().toISOString(),
+      label: label || ENTITY_LABELS[entityType] || "項目",
+    });
+  }
+
+  function restoreFromTrash(trashId, silent = false) {
+    const idx = data.trash.findIndex((t) => t.trashId === trashId);
+    if (idx < 0) return false;
+    const entry = data.trash[idx];
+    const item = entry.item;
+
+    switch (entry.entityType) {
+      case "client": {
+        const exists = data.clients.some((c) => c.id === item.id);
+        if (!exists) data.clients.unshift(item);
+        break;
+      }
+      case "customTask":
+        if (!data.customTasks.some((t) => t.id === item.id)) data.customTasks.push(item);
+        break;
+      case "defaultTask":
+        data.deletedDefaultTaskIds = data.deletedDefaultTaskIds.filter((id) => id !== item.id);
+        break;
+      case "note":
+        if (!data.notes.some((n) => n.id === item.id)) data.notes.unshift(item);
+        break;
+      case "salesLog":
+        if (!data.salesLogs.some((l) => l.id === item.id)) data.salesLogs.unshift(item);
+        break;
+      case "monthlyRecord": {
+        const i = data.monthlyRecords.findIndex((r) => r.month === item.month);
+        if (i >= 0) data.monthlyRecords[i] = item;
+        else data.monthlyRecords.push(item);
+        break;
+      }
+      case "customMilestone":
+        if (!data.customMilestones.some((m) => m.id === item.id)) data.customMilestones.push(item);
+        break;
+      case "customDmTemplate":
+        if (!data.customDmTemplates.some((t) => t.id === item.id)) data.customDmTemplates.push(item);
+        break;
+      case "monthOverride":
+        data.monthOverrides[item.monthKey] = item.override;
+        break;
+      case "monthTarget": {
+        const { monthKey, value } = item;
+        if (value == null) delete data.monthTargetOverrides[monthKey];
+        else data.monthTargetOverrides[monthKey] = value;
+        break;
+      }
+      default:
+        return false;
+    }
+
+    data.trash.splice(idx, 1);
+    saveData();
+    if (!silent) toast("復元しました");
+    return true;
+  }
+
+  function purgeTrash(trashId) {
+    data.trash = data.trash.filter((t) => t.trashId !== trashId);
+    saveData();
+    toast("完全に削除しました");
+  }
+
+  function emptyTrash() {
+    if (!data.trash.length) return toast("ゴミ箱は空です");
+    if (!confirm(`${data.trash.length}件を完全に削除しますか？復元できなくなります。`)) return;
+    data.trash = [];
+    saveData();
+    toast("ゴミ箱を空にしました");
+  }
+
+  function softDelete(entityType, item, label, removeFn) {
+    addToTrash(entityType, item, label);
+    const entryTrashId = data.trash[0].trashId;
+    removeFn();
+    saveData(false);
+    toast(`「${label}」を削除しました`, () => restoreFromTrash(entryTrashId, true));
+    renderAll();
+  }
+
+  function createArchive(label) {
+    const snapshot = deepClone(data);
+    snapshot.trash = [];
+    snapshot.archives = [];
+    data.archives.unshift({
+      id: uid(),
+      label: label || "手動バックアップ",
+      createdAt: new Date().toISOString(),
+      snapshot,
+    });
+    data.archives = data.archives.slice(0, 5);
+  }
+
+  function restoreArchive(archiveId) {
+    const arch = data.archives.find((a) => a.id === archiveId);
+    if (!arch) return;
+    if (!confirm("現在のデータはアーカイブに退避されます。復元しますか？")) return;
+    createArchive("復元前の自動バックアップ");
+    data = D.migrateUserData(arch.snapshot);
+    saveData();
+    toast("アーカイブから復元しました");
+  }
+
+  function actionButtons() {
+    return `<div class="item-actions">
+      <button type="button" class="icon-action" data-act="edit" title="編集">✎</button>
+      <button type="button" class="icon-action danger" data-act="delete" title="削除">🗑</button>
+    </div>`;
+  }
+
+  function bindItemActions(container, onEdit, onDelete) {
+    container.querySelectorAll("[data-act]").forEach((btn) => {
+      btn.addEventListener("click", (e) => {
+        e.stopPropagation();
+        const row = btn.closest("[data-id], [data-month], [data-ms]");
+        const id = row?.dataset.id || row?.dataset.month || row?.dataset.ms;
+        if (btn.dataset.act === "edit") onEdit(id, row);
+        else onDelete(id, row);
+      });
+    });
+  }
+
   /* ── DM helpers ── */
   function getDmLogsForDate(dateStr) {
     return data.salesLogs.filter((l) => l.date === dateStr && l.type === "dm");
@@ -96,9 +309,16 @@
   function addDm(count = 1) {
     const existing = getDmLogsForDate(todayStr())[0];
     if (existing) {
-      existing.count = (existing.count || 1) + count;
+      const prev = existing.count || 1;
+      existing.count = prev + count;
+      saveData(false);
+      toast(`DM +${count} を記録しました`, () => {
+        existing.count = prev;
+        if (existing.count <= 0) data.salesLogs = data.salesLogs.filter((x) => x.id !== existing.id);
+        saveData();
+      });
     } else {
-      data.salesLogs.unshift({
+      const entry = {
         id: uid(),
         type: "dm",
         date: todayStr(),
@@ -106,10 +326,16 @@
         channel: "X",
         notes: "",
         createdAt: new Date().toISOString(),
+      };
+      data.salesLogs.unshift(entry);
+      saveData(false);
+      toast(`DM +${count} を記録しました`, () => {
+        data.salesLogs = data.salesLogs.filter((x) => x.id !== entry.id);
+        saveData();
       });
     }
-    saveData();
-    toast(`DM +${count} を記録しました`);
+    renderSales();
+    renderHome();
   }
 
   /* ── Monthly records ── */
@@ -124,12 +350,10 @@
   }
 
   function getMonthTarget(month = currentMonthStr()) {
-    const plan = D.getMonthPlan(month);
+    if (data.monthTargetOverrides[month] != null) return data.monthTargetOverrides[month];
+    const plan = resolveMonth(month) || D.getMonthPlan(month);
     if (plan?.month?.kpis?.monthlyTarget) return plan.month.kpis.monthlyTarget;
-    if (plan?.phase) {
-      const mid = (plan.phase.revenueMin + plan.phase.revenueMax) / 2;
-      return mid;
-    }
+    if (plan?.phase) return (plan.phase.revenueMin + plan.phase.revenueMax) / 2;
     return data.settings.ultimateMonthly;
   }
 
@@ -177,12 +401,33 @@
 
   /* ── Toast & Modal ── */
   let toastTimer = null;
-  function toast(msg) {
+  function toast(msg, undoFn) {
     const t = $("#toast");
-    t.textContent = msg;
+    const msgEl = $("#toastMsg");
+    const undoBtn = $("#toastUndoBtn");
+    if (msgEl) msgEl.textContent = msg;
+    else t.textContent = msg;
+
+    undoCallback = undoFn || null;
+    if (undoBtn) {
+      undoBtn.hidden = !undoFn;
+      undoBtn.onclick = undoFn
+        ? () => {
+            undoCallback?.();
+            undoCallback = null;
+            undoBtn.hidden = true;
+            t.classList.remove("show");
+          }
+        : null;
+    }
+
     t.classList.add("show");
     clearTimeout(toastTimer);
-    toastTimer = setTimeout(() => t.classList.remove("show"), 2400);
+    toastTimer = setTimeout(() => {
+      t.classList.remove("show");
+      undoCallback = null;
+      if (undoBtn) undoBtn.hidden = true;
+    }, undoFn ? 8000 : 2400);
   }
 
   function openModal(title, bodyHtml, footHtml) {
@@ -229,7 +474,7 @@
     const phaseId = D.getCurrentPhaseKey();
     const phase = D.PHASES.find((p) => p.id === phaseId);
     const month = currentMonthStr();
-    const plan = D.getMonthPlan(month);
+    const plan = resolveMonth(month);
     const revenue = getCurrentMonthRevenue();
     const ultimate = parseNum(data.settings.ultimateMonthly);
     const pct = ultimate ? Math.min(100, (revenue / ultimate) * 100) : 0;
@@ -287,31 +532,53 @@
     const phaseId = D.getCurrentPhaseKey();
     const phase = D.PHASES.find((p) => p.id === phaseId);
     if (!phase) return;
-    const ms = phase.milestones;
-    const done = ms.filter((m) => data.milestones[m.id]?.done).length;
+    const ms = resolvePhaseMilestones(phase);
+    const done = ms.filter((m) => m.done).length;
     $("#milestoneProgress").textContent = `${done}/${ms.length}`;
     const el = $("#milestonePreview");
     el.innerHTML = ms
       .slice(0, 4)
       .map(
         (m) => `
-      <div class="ms-item">
-        <button type="button" class="ms-check ${data.milestones[m.id]?.done ? "done" : ""}" data-ms="${m.id}" aria-label="達成切替">
-          ${data.milestones[m.id]?.done ? "✓" : ""}
+      <div class="ms-item" data-ms="${m.id}" data-custom="${m.isCustom}">
+        <button type="button" class="ms-check ${m.done ? "done" : ""}" data-ms-toggle="${m.id}" data-custom="${m.isCustom}" aria-label="達成切替">
+          ${m.done ? "✓" : ""}
         </button>
-        <span>${escapeHtml(m.text)}</span>
+        <span class="ms-item-text">${escapeHtml(m.text)}</span>
+        <button type="button" class="icon-action" data-ms-edit="${m.id}" data-custom="${m.isCustom}" title="編集">✎</button>
       </div>`
       )
       .join("");
-    el.querySelectorAll("[data-ms]").forEach((btn) => {
-      btn.addEventListener("click", () => {
-        const id = btn.dataset.ms;
-        const cur = data.milestones[id];
-        cur.done = !cur.done;
-        cur.doneAt = cur.done ? new Date().toISOString() : null;
-        saveData();
+    el.querySelectorAll("[data-ms-toggle]").forEach((btn) => {
+      btn.addEventListener("click", () => toggleMilestone(btn.dataset.msToggle, btn.dataset.custom === "true"));
+    });
+    el.querySelectorAll("[data-ms-edit]").forEach((btn) => {
+      btn.addEventListener("click", (e) => {
+        e.stopPropagation();
+        openMilestoneModal(btn.dataset.msEdit, btn.dataset.custom === "true", phaseId);
       });
     });
+  }
+
+  function toggleMilestone(id, isCustom) {
+    let target;
+    if (isCustom) {
+      target = data.customMilestones.find((x) => x.id === id);
+    } else {
+      target = data.milestones[id];
+    }
+    if (!target) return;
+    const wasDone = !!target.done;
+    target.done = !wasDone;
+    target.doneAt = target.done ? new Date().toISOString() : null;
+    saveData(false);
+    toast(target.done ? "マイルストーンを達成にしました" : "マイルストーンを未達に戻しました", () => {
+      target.done = wasDone;
+      target.doneAt = wasDone ? target.doneAt : null;
+      saveData();
+    });
+    renderHome();
+    renderRoadmap();
   }
 
   /* ── Render: Roadmap ── */
@@ -327,24 +594,33 @@
     const container = $("#roadmapPhases");
     container.innerHTML = D.PHASES.map((p) => {
       const monthsHtml = p.months
-        .map(
-          (m) => `
-        <div class="month-block">
-          <h5><span>${m.label}</span>${escapeHtml(m.title)}</h5>
+        .map((m) => {
+          const resolved = resolveMonth(m.key)?.month || m;
+          return `
+        <div class="month-block" data-month-key="${m.key}">
+          <div class="month-block-head">
+            <h5><span>${m.label}</span>${escapeHtml(resolved.title)}</h5>
+            <button type="button" class="icon-action" data-edit-month="${m.key}" title="月次計画を編集">✎</button>
+          </div>
           <p class="muted small">行動</p>
-          <ul class="action-list">${m.actions.map((a) => `<li>${escapeHtml(a)}</li>`).join("")}</ul>
+          <ul class="action-list">${resolved.actions.map((a) => `<li>${escapeHtml(a)}</li>`).join("")}</ul>
           <p class="muted small">成果</p>
-          <ul class="outcome-list">${m.outcomes.map((o) => `<li>${escapeHtml(o)}</li>`).join("")}</ul>
-        </div>`
-        )
+          <ul class="outcome-list">${resolved.outcomes.map((o) => `<li>${escapeHtml(o)}</li>`).join("")}</ul>
+        </div>`;
+        })
         .join("");
-      const msHtml = p.milestones
+      const msList = resolvePhaseMilestones(p);
+      const msHtml = msList
         .map(
           (m) => `
-        <label>
-          <input type="checkbox" data-ms="${m.id}" ${data.milestones[m.id]?.done ? "checked" : ""} />
-          ${escapeHtml(m.text)}
-        </label>`
+        <div class="ms-row" data-ms="${m.id}" data-custom="${m.isCustom}">
+          <label style="flex:1;display:flex;align-items:center;gap:8px;">
+            <input type="checkbox" data-ms-check="${m.id}" data-custom="${m.isCustom}" ${m.done ? "checked" : ""} />
+            ${escapeHtml(m.text)}
+          </label>
+          <button type="button" class="icon-action" data-ms-edit="${m.id}" data-custom="${m.isCustom}" data-phase="${p.id}" title="編集">✎</button>
+          ${m.isCustom ? `<button type="button" class="icon-action danger" data-ms-del="${m.id}" title="削除">🗑</button>` : ""}
+        </div>`
         )
         .join("");
       return `
@@ -360,7 +636,13 @@
         </div>
         <div class="phase-body">
           ${monthsHtml}
-          <div class="month-block ms-roadmap">${msHtml}</div>
+          <div class="month-block ms-roadmap">
+            <div class="month-block-head">
+              <p class="muted small" style="margin:0">マイルストーン</p>
+              <button type="button" class="btn btn-ghost btn-sm" data-add-ms="${p.id}">+ 追加</button>
+            </div>
+            ${msHtml}
+          </div>
         </div>
       </article>`;
     }).join("");
@@ -380,12 +662,35 @@
     const openBlock = container.querySelector(`[data-phase="${curPhase}"]`);
     if (openBlock) openBlock.classList.add("open");
 
-    container.querySelectorAll("[data-ms]").forEach((cb) => {
+    container.querySelectorAll("[data-ms-check]").forEach((cb) => {
       cb.addEventListener("change", () => {
-        const id = cb.dataset.ms;
-        data.milestones[id].done = cb.checked;
-        data.milestones[id].doneAt = cb.checked ? new Date().toISOString() : null;
-        saveData();
+        toggleMilestone(cb.dataset.msCheck, cb.dataset.custom === "true");
+      });
+    });
+    container.querySelectorAll("[data-ms-edit]").forEach((btn) => {
+      btn.addEventListener("click", () => {
+        openMilestoneModal(btn.dataset.msEdit, btn.dataset.custom === "true", btn.dataset.phase);
+      });
+    });
+    container.querySelectorAll("[data-ms-del]").forEach((btn) => {
+      btn.addEventListener("click", () => {
+        const m = data.customMilestones.find((x) => x.id === btn.dataset.msDel);
+        if (!m) return;
+        softDelete("customMilestone", m, m.text, () => {
+          data.customMilestones = data.customMilestones.filter((x) => x.id !== m.id);
+        });
+      });
+    });
+    container.querySelectorAll("[data-add-ms]").forEach((btn) => {
+      btn.addEventListener("click", (e) => {
+        e.stopPropagation();
+        openMilestoneModal(null, true, btn.dataset.addMs);
+      });
+    });
+    container.querySelectorAll("[data-edit-month]").forEach((btn) => {
+      btn.addEventListener("click", (e) => {
+        e.stopPropagation();
+        openMonthPlanModal(btn.dataset.editMonth);
       });
     });
   }
@@ -403,14 +708,28 @@
         const total = parseNum(r.revenue) + parseNum(r.recurring);
         return `
       <div class="record-item" data-month="${r.month}">
-        <span class="record-month">${r.month}</span>
-        <span class="record-val">${formatYen(total, true)}</span>
+        <div class="record-item-main">
+          <span class="record-month">${r.month}</span>
+          <span class="record-val">${formatYen(total, true)}</span>
+        </div>
+        ${actionButtons()}
       </div>`;
       })
       .join("");
-    list.querySelectorAll(".record-item").forEach((el) => {
-      el.addEventListener("click", () => openRecordModal(el.dataset.month));
+    list.querySelectorAll(".record-item-main").forEach((el) => {
+      el.addEventListener("click", () => openRecordModal(el.closest(".record-item").dataset.month));
     });
+    bindItemActions(
+      list,
+      (month) => openRecordModal(month),
+      (month) => {
+        const r = getRecord(month);
+        if (!r) return;
+        softDelete("monthlyRecord", r, `${month}の記録`, () => {
+          data.monthlyRecords = data.monthlyRecords.filter((x) => x.month !== month);
+        });
+      }
+    );
   }
 
   function renderChart() {
@@ -468,16 +787,26 @@
     openModal(
       existing ? "月次記録を編集" : "月次記録を追加",
       `
-      <label class="field"><span>対象月</span><input type="month" id="mMonth" class="input" value="${m}" /></label>
+      <label class="field"><span>対象月</span><input type="month" id="mMonth" class="input" value="${m}" ${existing ? "" : ""} /></label>
       <label class="field"><span>新規売上（円）</span><input type="number" id="mRevenue" class="input" min="0" value="${existing?.revenue ?? ""}" /></label>
       <label class="field"><span>継続売上（円）</span><input type="number" id="mRecurring" class="input" min="0" value="${existing?.recurring ?? ""}" /></label>
       <label class="field"><span>手取り（円・任意）</span><input type="number" id="mTakeHome" class="input" min="0" value="${existing?.takeHome ?? ""}" /></label>
       <label class="field"><span>メモ</span><textarea id="mNotes" class="input">${escapeHtml(existing?.notes ?? "")}</textarea></label>
     `,
-      `<button type="button" class="btn btn-ghost" id="modalCancel">キャンセル</button>
+      `<button type="button" class="btn btn-danger btn-sm" id="modalDelete" ${existing ? "" : "hidden"}>削除</button>
+       <button type="button" class="btn btn-ghost" id="modalCancel">キャンセル</button>
        <button type="button" class="btn btn-primary" id="modalSave">保存</button>`
     );
     $("#modalCancel").onclick = closeModal;
+    if (existing) {
+      $("#modalDelete").onclick = () => {
+        const rec = getRecord(m);
+        closeModal();
+        softDelete("monthlyRecord", rec, `${m}の記録`, () => {
+          data.monthlyRecords = data.monthlyRecords.filter((x) => x.month !== m);
+        });
+      };
+    }
     $("#modalSave").onclick = () => {
       const monthKey = $("#mMonth").value;
       if (!monthKey) return toast("月を選択してください");
@@ -490,19 +819,144 @@
         updatedAt: new Date().toISOString(),
       };
       const idx = data.monthlyRecords.findIndex((r) => r.month === monthKey);
+      const oldMonth = existing?.month;
       if (idx >= 0) data.monthlyRecords[idx] = { ...data.monthlyRecords[idx], ...payload };
       else data.monthlyRecords.push(payload);
+      if (oldMonth && oldMonth !== monthKey) {
+        data.monthlyRecords = data.monthlyRecords.filter((r) => r.month !== oldMonth || r.month === monthKey);
+      }
       closeModal();
       saveData();
       toast("月次記録を保存しました");
     };
   }
 
+  function openMonthPlanModal(monthKey) {
+    const resolved = resolveMonth(monthKey);
+    if (!resolved) return;
+    const ov = data.monthOverrides[monthKey] || {};
+    const hasOverride = !!data.monthOverrides[monthKey];
+    openModal(
+      `${resolved.month.label}の計画を編集`,
+      `
+      <label class="field"><span>タイトル</span><input type="text" id="mpTitle" class="input" value="${escapeHtml(resolved.month.title)}" /></label>
+      <label class="field"><span>行動（1行1項目）</span><textarea id="mpActions" class="input" rows="4">${escapeHtml(resolved.month.actions.join("\n"))}</textarea></label>
+      <label class="field"><span>成果（1行1項目）</span><textarea id="mpOutcomes" class="input" rows="3">${escapeHtml(resolved.month.outcomes.join("\n"))}</textarea></label>
+      <label class="field"><span>月商目標（円・空欄でデフォルト）</span><input type="number" id="mpTarget" class="input" min="0" step="1000" value="${data.monthTargetOverrides[monthKey] ?? ""}" placeholder="${getMonthTarget(monthKey)}" /></label>
+      <p class="muted small">デフォルトの計画に戻す場合は「初期値に戻す」を押してください。</p>
+    `,
+      `<button type="button" class="btn btn-ghost btn-sm" id="modalReset" ${hasOverride || data.monthTargetOverrides[monthKey] != null ? "" : "hidden"}>初期値に戻す</button>
+       <button type="button" class="btn btn-ghost" id="modalCancel">キャンセル</button>
+       <button type="button" class="btn btn-primary" id="modalSave">保存</button>`
+    );
+    $("#modalCancel").onclick = closeModal;
+    $("#modalReset")?.addEventListener("click", () => {
+      const prevOv = data.monthOverrides[monthKey] ? deepClone(data.monthOverrides[monthKey]) : null;
+      const prevTarget = data.monthTargetOverrides[monthKey] ?? null;
+      delete data.monthOverrides[monthKey];
+      delete data.monthTargetOverrides[monthKey];
+      closeModal();
+      saveData();
+      toast("初期の計画に戻しました", () => {
+        if (prevOv) data.monthOverrides[monthKey] = prevOv;
+        else delete data.monthOverrides[monthKey];
+        if (prevTarget != null) data.monthTargetOverrides[monthKey] = prevTarget;
+        else delete data.monthTargetOverrides[monthKey];
+        saveData();
+      });
+    });
+    $("#modalSave").onclick = () => {
+      const title = $("#mpTitle").value.trim();
+      const actions = $("#mpActions").value.split("\n").map((s) => s.trim()).filter(Boolean);
+      const outcomes = $("#mpOutcomes").value.split("\n").map((s) => s.trim()).filter(Boolean);
+      const targetRaw = $("#mpTarget").value;
+      data.monthOverrides[monthKey] = { title, actions, outcomes };
+      if (targetRaw === "") delete data.monthTargetOverrides[monthKey];
+      else data.monthTargetOverrides[monthKey] = parseNum(targetRaw);
+      closeModal();
+      saveData();
+      toast("月次計画を保存しました");
+    };
+  }
+
+  function openMonthTargetModal() {
+    const month = currentMonthStr();
+    openMonthPlanModal(month);
+  }
+
+  function openMilestoneModal(id, isCustom, phaseId) {
+    let text = "";
+    let isNew = !id;
+    if (isCustom && id) {
+      text = data.customMilestones.find((m) => m.id === id)?.text || "";
+    } else if (id) {
+      const phase = D.PHASES.find((p) => p.id === phaseId);
+      const def = phase?.milestones.find((m) => m.id === id);
+      text = data.milestoneOverrides[id]?.text ?? def?.text ?? "";
+    }
+    openModal(
+      isNew ? "マイルストーンを追加" : "マイルストーンを編集",
+      `<label class="field"><span>内容</span><input type="text" id="msText" class="input" value="${escapeHtml(text)}" /></label>`,
+      `<button type="button" class="btn btn-danger btn-sm" id="modalDelete" ${isCustom && id ? "" : id && !isCustom ? "" : "hidden"}>${isCustom ? "削除" : "非表示"}</button>
+       <button type="button" class="btn btn-ghost" id="modalCancel">キャンセル</button>
+       <button type="button" class="btn btn-primary" id="modalSave">保存</button>`
+    );
+    $("#modalCancel").onclick = closeModal;
+    const delBtn = $("#modalDelete");
+    if (delBtn && !delBtn.hidden) {
+      delBtn.onclick = () => {
+        closeModal();
+        if (isCustom && id) {
+          const m = data.customMilestones.find((x) => x.id === id);
+          softDelete("customMilestone", m, m.text, () => {
+            data.customMilestones = data.customMilestones.filter((x) => x.id !== id);
+          });
+        } else if (id) {
+          const phase = D.PHASES.find((p) => p.id === phaseId);
+          const def = phase?.milestones.find((m) => m.id === id);
+          const label = data.milestoneOverrides[id]?.text ?? def?.text ?? id;
+          data.milestoneOverrides[id] = { ...(data.milestoneOverrides[id] || {}), hidden: true };
+          saveData();
+          toast(`「${label}」を非表示にしました`, () => {
+            if (data.milestoneOverrides[id]) {
+              data.milestoneOverrides[id].hidden = false;
+              saveData();
+            }
+          });
+        }
+      };
+      if (!isCustom && id) delBtn.textContent = "非表示";
+    }
+    $("#modalSave").onclick = () => {
+      const newText = $("#msText").value.trim();
+      if (!newText) return toast("内容を入力してください");
+      if (isNew) {
+        data.customMilestones.push({
+          id: uid(),
+          phaseId,
+          text: newText,
+          done: false,
+          doneAt: null,
+          createdAt: new Date().toISOString(),
+        });
+      } else if (isCustom) {
+        const m = data.customMilestones.find((x) => x.id === id);
+        if (m) m.text = newText;
+      } else {
+        data.milestoneOverrides[id] = { ...(data.milestoneOverrides[id] || {}), text: newText };
+      }
+      closeModal();
+      saveData();
+      toast("マイルストーンを保存しました");
+    };
+  }
+
   function updateSim() {
     const rev = parseNum($("#simRevenue")?.value);
-    const rate = parseNum($("#simRate")?.value) / 100;
-    $("#simRateLabel").textContent = `${Math.round(rate * 100)}%`;
-    $("#simTakeHome").textContent = formatYen(rev * rate);
+    const rateVal = parseNum($("#simRate")?.value);
+    const rate = (rateVal || data.settings.defaultTakeHomeRate || 67) / 100;
+    if ($("#simRateLabel")) $("#simRateLabel").textContent = `${Math.round(rate * 100)}%`;
+    if ($("#simTakeHome")) $("#simTakeHome").textContent = formatYen(rev * rate);
   }
 
   /* ── Render: Sales ── */
@@ -516,13 +970,47 @@
     $("#dmWeekText").textContent = `今週 ${week} / ${weekGoal} 件`;
     $("#dmWeekBar").style.width = `${Math.min(100, (week / weekGoal) * 100)}%`;
 
-    $("#dmTemplates").innerHTML = D.DM_TEMPLATES.map(
-      (t) => `
-      <div class="tpl-item">
-        <h4>${escapeHtml(t.name)}</h4>
+    $("#dmTemplates").innerHTML = getDmTemplatesList()
+      .map(
+        (t) => `
+      <div class="tpl-item" data-id="${t.id}" data-custom="${t.isCustom}">
+        <div class="tpl-head">
+          <h4>${escapeHtml(t.name)}</h4>
+          <div class="tpl-actions">
+            <button type="button" class="icon-action" data-tpl-edit="${t.id}" data-custom="${t.isCustom}" title="編集">✎</button>
+            <button type="button" class="icon-action danger" data-tpl-del="${t.id}" data-custom="${t.isCustom}" title="削除">🗑</button>
+          </div>
+        </div>
         <ol>${t.steps.map((s) => `<li>${escapeHtml(s)}</li>`).join("")}</ol>
       </div>`
-    ).join("");
+      )
+      .join("");
+
+    $("#dmTemplates").querySelectorAll("[data-tpl-edit]").forEach((btn) => {
+      btn.addEventListener("click", () => openDmTemplateModal(btn.dataset.tplEdit, btn.dataset.custom === "true"));
+    });
+    $("#dmTemplates").querySelectorAll("[data-tpl-del]").forEach((btn) => {
+      btn.addEventListener("click", () => {
+        const id = btn.dataset.tplDel;
+        const isCustom = btn.dataset.custom === "true";
+        if (isCustom) {
+          const tpl = data.customDmTemplates.find((x) => x.id === id);
+          if (!tpl) return;
+          softDelete("customDmTemplate", tpl, tpl.name, () => {
+            data.customDmTemplates = data.customDmTemplates.filter((x) => x.id !== id);
+          });
+        } else {
+          const tpl = D.DM_TEMPLATES.find((x) => x.id === id);
+          if (!tpl) return;
+          data.hiddenDmTemplateIds.push(id);
+          saveData();
+          toast(`「${tpl.name}」を非表示にしました`, () => {
+            data.hiddenDmTemplateIds = data.hiddenDmTemplateIds.filter((x) => x !== id);
+            saveData();
+          });
+        }
+      });
+    });
 
     const allLogs = [...data.salesLogs].sort((a, b) => (b.date || "").localeCompare(a.date || ""));
     const list = $("#salesLogList");
@@ -531,45 +1019,127 @@
       return;
     }
     list.innerHTML = allLogs
-      .slice(0, 30)
+      .slice(0, 50)
       .map(
         (l) => `
       <div class="log-item" data-id="${l.id}">
-        <div class="log-date">${l.date} · ${l.type === "dm" ? `DM ${l.count || 1}件` : escapeHtml(l.channel || "営業")}</div>
-        <div class="log-body">${escapeHtml(l.notes || "(メモなし)")}</div>
+        <div class="log-item-body">
+          <div class="log-date">${l.date} · ${l.type === "dm" ? `DM ${l.count || 1}件` : escapeHtml(l.channel || "営業")}</div>
+          <div class="log-body">${escapeHtml(l.notes || "(メモなし)")}</div>
+        </div>
+        ${actionButtons()}
       </div>`
       )
       .join("");
+    list.querySelectorAll(".log-item-body").forEach((el) => {
+      el.addEventListener("click", () => openSalesLogModal(el.closest(".log-item").dataset.id));
+    });
+    bindItemActions(
+      list,
+      (id) => openSalesLogModal(id),
+      (id) => {
+        const log = data.salesLogs.find((x) => x.id === id);
+        if (!log) return;
+        const label = log.type === "dm" ? `${log.date} DM ${log.count || 1}件` : log.notes?.slice(0, 20) || "営業ログ";
+        softDelete("salesLog", log, label, () => {
+          data.salesLogs = data.salesLogs.filter((x) => x.id !== id);
+        });
+      }
+    );
   }
 
-  function openSalesLogModal() {
+  function openDmTemplateModal(id, isCustom) {
+    let tpl = null;
+    if (isCustom && id) tpl = data.customDmTemplates.find((x) => x.id === id);
+    else if (id) tpl = D.DM_TEMPLATES.find((x) => x.id === id);
     openModal(
-      "営業ログ",
+      tpl ? "DMテンプレートを編集" : "DMテンプレートを追加",
       `
-      <label class="field"><span>日付</span><input type="date" id="sDate" class="input" value="${todayStr()}" /></label>
-      <label class="field"><span>チャネル</span>
-        <select id="sChannel" class="input">
-          <option>X (Twitter)</option><option>Instagram</option><option>紹介</option><option>その他</option>
-        </select>
-      </label>
-      <label class="field"><span>内容</span><textarea id="sNotes" class="input" placeholder="反応・次のアクションなど"></textarea></label>
+      <label class="field"><span>名前</span><input type="text" id="dtName" class="input" value="${escapeHtml(tpl?.name ?? "")}" /></label>
+      <label class="field"><span>ステップ（1行1ステップ）</span><textarea id="dtSteps" class="input" rows="5">${escapeHtml((tpl?.steps || []).join("\n"))}</textarea></label>
     `,
       `<button type="button" class="btn btn-ghost" id="modalCancel">キャンセル</button>
        <button type="button" class="btn btn-primary" id="modalSave">保存</button>`
     );
     $("#modalCancel").onclick = closeModal;
     $("#modalSave").onclick = () => {
-      data.salesLogs.unshift({
-        id: uid(),
-        type: "log",
-        date: $("#sDate").value,
-        channel: $("#sChannel").value,
-        notes: $("#sNotes").value.trim(),
-        createdAt: new Date().toISOString(),
-      });
+      const name = $("#dtName").value.trim();
+      const steps = $("#dtSteps").value.split("\n").map((s) => s.trim()).filter(Boolean);
+      if (!name || !steps.length) return toast("名前とステップを入力してください");
+      if (isCustom && id) {
+        const t = data.customDmTemplates.find((x) => x.id === id);
+        if (t) {
+          t.name = name;
+          t.steps = steps;
+        }
+      } else if (!id) {
+        data.customDmTemplates.push({ id: uid(), name, steps, createdAt: new Date().toISOString() });
+      } else {
+        data.customDmTemplates.push({
+          id: uid(),
+          name,
+          steps,
+          basedOn: id,
+          createdAt: new Date().toISOString(),
+        });
+      }
       closeModal();
       saveData();
-      toast("営業ログを追加しました");
+      toast("テンプレートを保存しました");
+    };
+  }
+
+  function openSalesLogModal(logId) {
+    const existing = logId ? data.salesLogs.find((x) => x.id === logId) : null;
+    const isDm = existing?.type === "dm";
+    openModal(
+      existing ? "営業ログを編集" : "営業ログを追加",
+      `
+      <label class="field"><span>日付</span><input type="date" id="sDate" class="input" value="${existing?.date || todayStr()}" /></label>
+      ${isDm ? `<label class="field"><span>DM件数</span><input type="number" id="sCount" class="input" min="1" value="${existing?.count || 1}" /></label>` : `
+      <label class="field"><span>チャネル</span>
+        <select id="sChannel" class="input">
+          ${["X (Twitter)", "Instagram", "紹介", "その他"]
+            .map((c) => `<option ${existing?.channel === c ? "selected" : ""}>${c}</option>`)
+            .join("")}
+        </select>
+      </label>`}
+      <label class="field"><span>内容</span><textarea id="sNotes" class="input" placeholder="反応・次のアクションなど">${escapeHtml(existing?.notes ?? "")}</textarea></label>
+    `,
+      `<button type="button" class="btn btn-danger btn-sm" id="modalDelete" ${existing ? "" : "hidden"}>削除</button>
+       <button type="button" class="btn btn-ghost" id="modalCancel">キャンセル</button>
+       <button type="button" class="btn btn-primary" id="modalSave">保存</button>`
+    );
+    $("#modalCancel").onclick = closeModal;
+    if (existing) {
+      $("#modalDelete").onclick = () => {
+        const log = existing;
+        closeModal();
+        softDelete("salesLog", log, log.notes?.slice(0, 20) || "営業ログ", () => {
+          data.salesLogs = data.salesLogs.filter((x) => x.id !== logId);
+        });
+      };
+    }
+    $("#modalSave").onclick = () => {
+      if (existing) {
+        existing.date = $("#sDate").value;
+        existing.notes = $("#sNotes").value.trim();
+        if (isDm) existing.count = parseNum($("#sCount").value) || 1;
+        else existing.channel = $("#sChannel").value;
+        existing.updatedAt = new Date().toISOString();
+      } else {
+        data.salesLogs.unshift({
+          id: uid(),
+          type: "log",
+          date: $("#sDate").value,
+          channel: $("#sChannel").value,
+          notes: $("#sNotes").value.trim(),
+          createdAt: new Date().toISOString(),
+        });
+      }
+      closeModal();
+      saveData();
+      toast(existing ? "営業ログを更新しました" : "営業ログを追加しました");
     };
   }
 
@@ -653,11 +1223,11 @@
     $("#modalCancel").onclick = closeModal;
     if (c) {
       $("#modalDelete").onclick = () => {
-        if (!confirm("この案件を削除しますか？")) return;
-        data.clients = data.clients.filter((x) => x.id !== id);
+        const client = { ...c };
         closeModal();
-        saveData();
-        toast("案件を削除しました");
+        softDelete("client", client, client.name, () => {
+          data.clients = data.clients.filter((x) => x.id !== id);
+        });
       };
     }
     $("#modalSave").onclick = () => {
@@ -686,9 +1256,8 @@
 
   /* ── Render: Tasks ── */
   function renderTasks() {
-    const all = [...data.tasks, ...data.customTasks];
-    const filtered =
-      taskFilter === "all" ? all : all.filter((t) => t.category === taskFilter);
+    const all = getActiveTasks();
+    const filtered = taskFilter === "all" ? all : all.filter((t) => t.category === taskFilter);
     const list = $("#taskList");
     if (!filtered.length) {
       list.innerHTML = '<p class="empty-state">タスクがありません</p>';
@@ -698,22 +1267,54 @@
       .map(
         (t) => `
       <div class="task-item" data-id="${t.id}">
-        <button type="button" class="task-check ${t.done ? "done" : ""}" data-task="${t.id}">${t.done ? "✓" : ""}</button>
-        <span class="task-text ${t.done ? "done" : ""}">${escapeHtml(t.text)}</span>
+        <div class="task-main">
+          <button type="button" class="task-check ${t.done ? "done" : ""}" data-task="${t.id}">${t.done ? "✓" : ""}</button>
+          <span class="task-text ${t.done ? "done" : ""}">${escapeHtml(t.text)}</span>
+        </div>
+        ${actionButtons()}
       </div>`
       )
       .join("");
     list.querySelectorAll("[data-task]").forEach((btn) => {
-      btn.addEventListener("click", () => toggleTask(btn.dataset.task));
+      btn.addEventListener("click", (e) => {
+        e.stopPropagation();
+        toggleTask(btn.dataset.task);
+      });
+    });
+    bindItemActions(
+      list,
+      (id) => openTaskModal(id),
+      (id) => deleteTask(id)
+    );
+  }
+
+  function deleteTask(id) {
+    const t = findTask(id);
+    if (!t) return;
+    const isDefault = isDefaultTask(id);
+    softDelete(isDefault ? "defaultTask" : "customTask", t, t.text, () => {
+      if (isDefault) {
+        if (!data.deletedDefaultTaskIds.includes(id)) data.deletedDefaultTaskIds.push(id);
+      } else {
+        data.customTasks = data.customTasks.filter((x) => x.id !== id);
+      }
     });
   }
 
   function toggleTask(id) {
-    let t = data.tasks.find((x) => x.id === id) || data.customTasks.find((x) => x.id === id);
+    const t = findTask(id);
     if (!t) return;
-    t.done = !t.done;
+    const wasDone = !!t.done;
+    const prevDoneAt = t.doneAt;
+    t.done = !wasDone;
     t.doneAt = t.done ? new Date().toISOString() : null;
-    saveData();
+    saveData(false);
+    toast(t.done ? "タスクを完了にしました" : "タスクを未完了に戻しました", () => {
+      t.done = wasDone;
+      t.doneAt = prevDoneAt;
+      saveData();
+    });
+    renderTasks();
   }
 
   function renderNotes() {
@@ -726,60 +1327,115 @@
       .map(
         (n) => `
       <div class="note-item" data-id="${n.id}">
-        <div class="note-date">${n.date || ""}</div>
-        ${escapeHtml(n.text)}
+        <div class="note-main">
+          <div class="note-date">${n.date || ""}</div>
+          ${escapeHtml(n.text)}
+        </div>
+        ${actionButtons()}
       </div>`
       )
       .join("");
+    list.querySelectorAll(".note-main").forEach((el) => {
+      el.addEventListener("click", () => openNoteModal(el.closest(".note-item").dataset.id));
+    });
+    bindItemActions(
+      list,
+      (id) => openNoteModal(id),
+      (id) => {
+        const note = data.notes.find((x) => x.id === id);
+        if (!note) return;
+        softDelete("note", note, note.text.slice(0, 24), () => {
+          data.notes = data.notes.filter((x) => x.id !== id);
+        });
+      }
+    );
   }
 
-  function openTaskModal() {
+  function openTaskModal(taskId) {
+    const existing = taskId ? findTask(taskId) : null;
     openModal(
-      "タスクを追加",
-      `<label class="field"><span>内容</span><input type="text" id="tText" class="input" /></label>
+      existing ? "タスクを編集" : "タスクを追加",
+      `<label class="field"><span>内容</span><input type="text" id="tText" class="input" value="${escapeHtml(existing?.text ?? "")}" /></label>
        <label class="field"><span>カテゴリ</span>
          <select id="tCat" class="input">
-           <option value="sales">営業</option><option value="delivery">納品</option>
-           <option value="retention">継続</option><option value="product">プロダクト</option>
+           ${["sales", "delivery", "retention", "product"]
+             .map(
+               (c) =>
+                 `<option value="${c}" ${existing?.category === c ? "selected" : ""}>${
+                   { sales: "営業", delivery: "納品", retention: "継続", product: "プロダクト" }[c]
+                 }</option>`
+             )
+             .join("")}
          </select>
        </label>`,
-      `<button type="button" class="btn btn-ghost" id="modalCancel">キャンセル</button>
-       <button type="button" class="btn btn-primary" id="modalSave">追加</button>`
+      `<button type="button" class="btn btn-danger btn-sm" id="modalDelete" ${existing ? "" : "hidden"}>削除</button>
+       <button type="button" class="btn btn-ghost" id="modalCancel">キャンセル</button>
+       <button type="button" class="btn btn-primary" id="modalSave">${existing ? "保存" : "追加"}</button>`
     );
     $("#modalCancel").onclick = closeModal;
+    if (existing) {
+      $("#modalDelete").onclick = () => {
+        closeModal();
+        deleteTask(taskId);
+      };
+    }
     $("#modalSave").onclick = () => {
       const text = $("#tText").value.trim();
       if (!text) return toast("内容を入力してください");
-      data.customTasks.push({
-        id: uid(),
-        text,
-        category: $("#tCat").value,
-        phaseId: D.getCurrentPhaseKey(),
-        done: false,
-        createdAt: new Date().toISOString(),
-      });
+      const category = $("#tCat").value;
+      if (existing) {
+        existing.text = text;
+        existing.category = category;
+        existing.updatedAt = new Date().toISOString();
+      } else {
+        data.customTasks.push({
+          id: uid(),
+          text,
+          category,
+          phaseId: D.getCurrentPhaseKey(),
+          done: false,
+          createdAt: new Date().toISOString(),
+        });
+      }
       closeModal();
       saveData();
-      toast("タスクを追加しました");
+      toast(existing ? "タスクを更新しました" : "タスクを追加しました");
     };
   }
 
-  function openNoteModal() {
+  function openNoteModal(noteId) {
+    const existing = noteId ? data.notes.find((x) => x.id === noteId) : null;
     openModal(
-      "戦略メモ",
-      `<label class="field"><span>日付</span><input type="date" id="nDate" class="input" value="${todayStr()}" /></label>
-       <label class="field"><span>内容</span><textarea id="nText" class="input"></textarea></label>`,
-      `<button type="button" class="btn btn-ghost" id="modalCancel">キャンセル</button>
+      existing ? "戦略メモを編集" : "戦略メモ",
+      `<label class="field"><span>日付</span><input type="date" id="nDate" class="input" value="${existing?.date || todayStr()}" /></label>
+       <label class="field"><span>内容</span><textarea id="nText" class="input">${escapeHtml(existing?.text ?? "")}</textarea></label>`,
+      `<button type="button" class="btn btn-danger btn-sm" id="modalDelete" ${existing ? "" : "hidden"}>削除</button>
+       <button type="button" class="btn btn-ghost" id="modalCancel">キャンセル</button>
        <button type="button" class="btn btn-primary" id="modalSave">保存</button>`
     );
     $("#modalCancel").onclick = closeModal;
+    if (existing) {
+      $("#modalDelete").onclick = () => {
+        const note = existing;
+        closeModal();
+        softDelete("note", note, note.text.slice(0, 24), () => {
+          data.notes = data.notes.filter((x) => x.id !== noteId);
+        });
+      };
+    }
     $("#modalSave").onclick = () => {
       const text = $("#nText").value.trim();
       if (!text) return toast("内容を入力してください");
-      data.notes.unshift({ id: uid(), date: $("#nDate").value, text, createdAt: new Date().toISOString() });
+      if (existing) {
+        existing.date = $("#nDate").value;
+        existing.text = text;
+        existing.updatedAt = new Date().toISOString();
+      } else {
+        data.notes.unshift({ id: uid(), date: $("#nDate").value, text, createdAt: new Date().toISOString() });
+      }
       closeModal();
       saveData();
-      toast("メモを保存しました");
+      toast(existing ? "メモを更新しました" : "メモを保存しました");
     };
   }
 
@@ -792,6 +1448,176 @@
     $("#settingTakeHome").value = data.settings.ultimateTakeHome;
     $("#settingDmDaily").value = data.settings.dmDailyGoal;
     $("#settingDmWeekly").value = data.settings.dmWeeklyGoal;
+    const rate = data.settings.defaultTakeHomeRate ?? 67;
+    if ($("#simRate")) $("#simRate").value = rate;
+    renderTrash();
+    renderArchives();
+    const verEl = $("#appVersionLabel");
+    if (verEl) verEl.textContent = `v${APP_VERSION}`;
+  }
+
+  /* ── Service Worker / 更新 ── */
+  function showUpdateBanner(reg) {
+    const banner = $("#updateBanner");
+    if (!banner || banner.classList.contains("show")) return;
+    banner.classList.add("show");
+    swRegistration = reg || swRegistration;
+    const btn = $("#updateAppBtn");
+    if (btn) {
+      btn.onclick = () => applyServiceWorkerUpdate();
+    }
+    $("#dismissUpdateBtn")?.addEventListener("click", () => {
+      banner.classList.remove("show");
+    }, { once: true });
+  }
+
+  function applyServiceWorkerUpdate() {
+    const waiting = swRegistration?.waiting;
+    if (waiting) {
+      waiting.postMessage({ type: "SKIP_WAITING" });
+      toast("更新を適用しています…");
+      return;
+    }
+    window.location.reload();
+  }
+
+  async function checkForAppUpdate(showToast = true) {
+    if (!("serviceWorker" in navigator)) {
+      if (showToast) toast("この環境では自動更新に対応していません");
+      return;
+    }
+    try {
+      const reg = await navigator.serviceWorker.register("./sw.js", {
+        scope: "./",
+        updateViaCache: "none",
+      });
+      swRegistration = reg;
+      await reg.update();
+      if (reg.waiting) {
+        showUpdateBanner(reg);
+        if (showToast) toast("新しいバージョンがあります。「更新する」を押してください");
+      } else if (showToast) {
+        toast("最新版を使用中です（v" + APP_VERSION + "）");
+      }
+    } catch {
+      if (showToast) toast("更新の確認に失敗しました");
+    }
+  }
+
+  async function forceClearCacheAndReload() {
+    if (!confirm("キャッシュを消去して最新版を読み込みます。データは端末に残ります。続行しますか？")) return;
+    try {
+      if ("serviceWorker" in navigator) {
+        const regs = await navigator.serviceWorker.getRegistrations();
+        await Promise.all(regs.map((r) => r.unregister()));
+      }
+      if ("caches" in window) {
+        const keys = await caches.keys();
+        await Promise.all(keys.map((k) => caches.delete(k)));
+      }
+    } catch (_) {}
+    const url = new URL(window.location.href);
+    url.searchParams.set("_v", String(Date.now()));
+    window.location.replace(url.toString());
+  }
+
+  async function registerServiceWorker() {
+    if (!("serviceWorker" in navigator)) return;
+
+    navigator.serviceWorker.addEventListener("controllerchange", () => {
+      if (swReloading) return;
+      swReloading = true;
+      window.location.reload();
+    });
+
+    try {
+      const reg = await navigator.serviceWorker.register("./sw.js", {
+        scope: "./",
+        updateViaCache: "none",
+      });
+      swRegistration = reg;
+
+      if (reg.waiting) showUpdateBanner(reg);
+
+      reg.addEventListener("updatefound", () => {
+        const nw = reg.installing;
+        if (!nw) return;
+        nw.addEventListener("statechange", () => {
+          if (nw.state === "installed" && navigator.serviceWorker.controller) {
+            showUpdateBanner(reg);
+          }
+        });
+      });
+
+      await reg.update();
+
+      document.addEventListener("visibilitychange", () => {
+        if (document.visibilityState === "visible") reg.update();
+      });
+
+      setInterval(() => reg.update(), 60 * 60 * 1000);
+    } catch (_) {}
+  }
+
+  function renderTrash() {
+    const list = $("#trashList");
+    const summary = $("#trashSummary");
+    if (!list) return;
+    if (summary) summary.textContent = data.trash.length ? `${data.trash.length}件の削除済み項目` : "削除した項目はここから復元できます";
+    if (!data.trash.length) {
+      list.innerHTML = '<p class="empty-state">ゴミ箱は空です</p>';
+      return;
+    }
+    list.innerHTML = data.trash
+      .map(
+        (t) => `
+      <div class="trash-item" data-trash="${t.trashId}">
+        <div class="trash-item-meta">
+          <div class="trash-item-label">${escapeHtml(t.label)}</div>
+          <div class="trash-item-type">${ENTITY_LABELS[t.entityType] || t.entityType} · ${(t.deletedAt || "").slice(0, 10)}</div>
+        </div>
+        <div class="trash-item-actions">
+          <button type="button" class="btn btn-primary btn-sm" data-restore="${t.trashId}">復元</button>
+          <button type="button" class="btn btn-ghost btn-sm danger-text" data-purge="${t.trashId}">完全削除</button>
+        </div>
+      </div>`
+      )
+      .join("");
+    list.querySelectorAll("[data-restore]").forEach((btn) => {
+      btn.addEventListener("click", () => restoreFromTrash(btn.dataset.restore));
+    });
+    list.querySelectorAll("[data-purge]").forEach((btn) => {
+      btn.addEventListener("click", () => {
+        if (!confirm("完全に削除しますか？復元できなくなります。")) return;
+        purgeTrash(btn.dataset.purge);
+      });
+    });
+  }
+
+  function renderArchives() {
+    const list = $("#archiveList");
+    if (!list) return;
+    if (!data.archives.length) {
+      list.innerHTML = '<p class="empty-state">アーカイブはありません（リセット時に自動作成されます）</p>';
+      return;
+    }
+    list.innerHTML = data.archives
+      .map(
+        (a) => `
+      <div class="archive-item" data-archive="${a.id}">
+        <div class="archive-item-meta">
+          <div class="trash-item-label">${escapeHtml(a.label)}</div>
+          <div class="archive-item-date">${(a.createdAt || "").slice(0, 16).replace("T", " ")}</div>
+        </div>
+        <div class="archive-item-actions">
+          <button type="button" class="btn btn-primary btn-sm" data-restore-arch="${a.id}">復元</button>
+        </div>
+      </div>`
+      )
+      .join("");
+    list.querySelectorAll("[data-restore-arch]").forEach((btn) => {
+      btn.addEventListener("click", () => restoreArchive(btn.dataset.restoreArch));
+    });
   }
 
   function saveSettingsFromForm() {
@@ -802,6 +1628,7 @@
     data.settings.ultimateTakeHome = parseNum($("#settingTakeHome").value);
     data.settings.dmDailyGoal = parseNum($("#settingDmDaily").value) || 10;
     data.settings.dmWeeklyGoal = parseNum($("#settingDmWeekly").value) || 50;
+    if ($("#simRate")) data.settings.defaultTakeHomeRate = parseNum($("#simRate").value) || 67;
     saveData();
     toast("設定を保存しました");
   }
@@ -832,17 +1659,18 @@
   }
 
   function resetData() {
-    if (!confirm("すべての記録が削除されます。本当にリセットしますか？")) return;
-    if (!confirm("最終確認：この操作は取り消せません。")) return;
-    localStorage.removeItem(STORAGE_KEY);
+    if (!confirm("すべての記録が初期状態に戻ります。続行しますか？")) return;
+    createArchive("リセット前の自動バックアップ");
+    const archives = data.archives;
     data = D.createDefaultUserData();
+    data.archives = archives;
     saveData();
-    toast("データをリセットしました");
+    toast("データをリセットしました。設定のアーカイブから復元できます。");
   }
 
   /* ── Focus notification ── */
   function showFocusAlert() {
-    const plan = D.getMonthPlan(currentMonthStr());
+    const plan = resolveMonth(currentMonthStr());
     if (!plan) return toast("今月のプランがありません");
     toast(`${plan.month.label}: ${plan.month.title}`);
   }
@@ -912,9 +1740,21 @@
       if (!logs.length) return toast("今日のDM記録がありません");
       const l = logs[0];
       if ((l.count || 1) <= 1) {
-        data.salesLogs = data.salesLogs.filter((x) => x.id !== l.id);
-      } else l.count -= 1;
-      saveData();
+        const copy = { ...l };
+        softDelete("salesLog", copy, `今日のDM記録`, () => {
+          data.salesLogs = data.salesLogs.filter((x) => x.id !== l.id);
+        });
+      } else {
+        const prev = l.count;
+        l.count -= 1;
+        saveData(false);
+        toast("DMを1件減らしました", () => {
+          l.count = prev;
+          saveData();
+        });
+        renderSales();
+        renderHome();
+      }
     });
 
     $$(".quick-btn").forEach((btn) => {
@@ -936,10 +1776,14 @@
     });
 
     $("#addRecordBtn").addEventListener("click", () => openRecordModal());
-    $("#addSalesLogBtn").addEventListener("click", openSalesLogModal);
+    $("#editMonthTargetBtn")?.addEventListener("click", openMonthTargetModal);
+    $("#editFocusBtn")?.addEventListener("click", () => openMonthPlanModal(currentMonthStr()));
+    $("#addSalesLogBtn").addEventListener("click", () => openSalesLogModal());
+    $("#addDmTemplateBtn")?.addEventListener("click", () => openDmTemplateModal(null, true));
     $("#addClientBtn").addEventListener("click", () => openClientModal());
-    $("#addTaskBtn").addEventListener("click", openTaskModal);
-    $("#addNoteBtn").addEventListener("click", openNoteModal);
+    $("#addTaskBtn").addEventListener("click", () => openTaskModal());
+    $("#addNoteBtn").addEventListener("click", () => openNoteModal());
+    $("#emptyTrashBtn")?.addEventListener("click", emptyTrash);
     $("#saveSettingsBtn").addEventListener("click", saveSettingsFromForm);
     $("#exportBtn").addEventListener("click", exportData);
     $("#importFile").addEventListener("change", (e) => {
@@ -949,6 +1793,8 @@
     });
     $("#resetDataBtn").addEventListener("click", resetData);
     $("#notifBtn").addEventListener("click", showFocusAlert);
+    $("#checkUpdateBtn")?.addEventListener("click", () => checkForAppUpdate(true));
+    $("#forceUpdateBtn")?.addEventListener("click", forceClearCacheAndReload);
 
     $$("#chartRangeSeg .seg-btn").forEach((btn) => {
       btn.addEventListener("click", () => {
@@ -960,7 +1806,13 @@
     });
 
     $("#simRevenue")?.addEventListener("input", updateSim);
-    $("#simRate")?.addEventListener("input", updateSim);
+    $("#simRate")?.addEventListener("input", () => {
+      updateSim();
+      data.settings.defaultTakeHomeRate = parseNum($("#simRate").value) || 67;
+      try {
+        localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
+      } catch (_) {}
+    });
 
     $$("#taskFilters .chip").forEach((chip) => {
       chip.addEventListener("click", () => {
@@ -993,16 +1845,14 @@
       $("#installCard").hidden = true;
     });
 
-    if ("serviceWorker" in navigator) {
-      navigator.serviceWorker.register("./sw.js").catch(() => {});
-    }
+    registerServiceWorker();
 
     attachRipples();
     renderAll();
     updateNavIndicator("home");
 
     setTimeout(() => {
-      const plan = D.getMonthPlan(currentMonthStr());
+      const plan = resolveMonth(currentMonthStr());
       if (plan && getCurrentMonthRevenue() === 0 && !localStorage.getItem("startupRoadmap_welcomed")) {
         localStorage.setItem("startupRoadmap_welcomed", "1");
         toast(`第${plan.phase.number}期スタート: ${plan.month.title}`);
