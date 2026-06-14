@@ -446,6 +446,8 @@
       archives: [],
       monthOverrides: {},
       monthTargetOverrides: {},
+      phaseOverrides: {},
+      roadmapIntro: null,
       milestoneOverrides: {},
       customMilestones: [],
       customDmTemplates: [],
@@ -463,6 +465,9 @@
     out.trash = Array.isArray(saved.trash) ? saved.trash : [];
     out.archives = Array.isArray(saved.archives) ? saved.archives : [];
     out.monthOverrides = saved.monthOverrides && typeof saved.monthOverrides === "object" ? saved.monthOverrides : {};
+    out.phaseOverrides = saved.phaseOverrides && typeof saved.phaseOverrides === "object" ? saved.phaseOverrides : {};
+    out.roadmapIntro =
+      saved.roadmapIntro && typeof saved.roadmapIntro === "object" ? saved.roadmapIntro : null;
     out.monthTargetOverrides =
       saved.monthTargetOverrides && typeof saved.monthTargetOverrides === "object" ? saved.monthTargetOverrides : {};
     out.milestoneOverrides =

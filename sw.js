@@ -1,5 +1,5 @@
 /* Service Worker — ネットワーク優先（ホーム画面追加後も最新版を取得） */
-const CACHE = "startup-roadmap-v5";
+const CACHE = "startup-roadmap-v6";
 const SHELL = [
   "./index.html",
   "./styles.css",

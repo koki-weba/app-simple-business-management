@@ -4,7 +4,7 @@
 
   const D = window.StartupDefaults;
   const STORAGE_KEY = D.STORAGE_KEY;
-  const APP_VERSION = 5;
+  const APP_VERSION = 6;
   const CIRC = 326.7;
 
   const PAGE_META = {
@@ -37,6 +37,8 @@
     customDmTemplate: "DMテンプレート",
     monthOverride: "月次計画",
     monthTarget: "月別目標",
+    phaseOverride: "期間計画",
+    roadmapIntro: "ロードマップ概要",
   };
 
   const $ = (sel) => document.querySelector(sel);
@@ -90,17 +92,59 @@
     return JSON.parse(JSON.stringify(obj));
   }
 
+  function resolvePhase(phase) {
+    const ov = data.phaseOverrides[phase.id] || {};
+    return {
+      ...phase,
+      title: ov.title != null ? ov.title : phase.title,
+      period: ov.period != null ? ov.period : phase.period,
+      theme: ov.theme != null ? ov.theme : phase.theme,
+      revenueLabel: ov.revenueLabel != null ? ov.revenueLabel : phase.revenueLabel,
+      revenueMin: ov.revenueMin != null ? ov.revenueMin : phase.revenueMin,
+      revenueMax: ov.revenueMax != null ? ov.revenueMax : phase.revenueMax,
+      start: ov.start != null ? ov.start : phase.start,
+      end: ov.end != null ? ov.end : phase.end,
+      hidden: !!ov.hidden,
+    };
+  }
+
+  function getResolvedPhases() {
+    return D.PHASES.map(resolvePhase).filter((p) => !p.hidden);
+  }
+
+  function getActivePhaseKey() {
+    const ym = currentMonthStr();
+    const phases = getResolvedPhases();
+    for (const p of phases) {
+      if (ym >= p.start && ym <= p.end) return p.id;
+    }
+    if (phases.length && ym < phases[0].start) return phases[0].id;
+    return phases[phases.length - 1]?.id || D.PHASES[0].id;
+  }
+
+  function getRoadmapIntro() {
+    const defaults = {
+      title: "5期間ロードマップ",
+      description:
+        "2026年5月から2028年3月まで、0→1・単価UP・ストック収益・外注化・月商60万を段階的に達成します。",
+    };
+    return { ...defaults, ...(data.roadmapIntro || {}) };
+  }
+
   function resolveMonth(monthKey) {
     const plan = D.getMonthPlan(monthKey);
     if (!plan) return null;
     const ov = data.monthOverrides[monthKey] || {};
+    const phase = resolvePhase(plan.phase);
     return {
-      phase: plan.phase,
+      phase,
       month: {
         ...plan.month,
+        label: ov.label != null ? ov.label : plan.month.label,
         title: ov.title != null ? ov.title : plan.month.title,
         actions: ov.actions != null ? ov.actions : plan.month.actions,
         outcomes: ov.outcomes != null ? ov.outcomes : plan.month.outcomes,
+        hidden: !!ov.hidden,
       },
     };
   }
@@ -206,6 +250,12 @@
         else data.monthTargetOverrides[monthKey] = value;
         break;
       }
+      case "phaseOverride":
+        data.phaseOverrides[item.phaseId] = item.override;
+        break;
+      case "roadmapIntro":
+        data.roadmapIntro = item.intro;
+        break;
       default:
         return false;
     }
@@ -471,8 +521,9 @@
 
   /* ── Render: Home ── */
   function renderHome() {
-    const phaseId = D.getCurrentPhaseKey();
-    const phase = D.PHASES.find((p) => p.id === phaseId);
+    const phaseId = getActivePhaseKey();
+    const basePhase = D.PHASES.find((p) => p.id === phaseId);
+    const phase = basePhase ? resolvePhase(basePhase) : null;
     const month = currentMonthStr();
     const plan = resolveMonth(month);
     const revenue = getCurrentMonthRevenue();
@@ -521,16 +572,20 @@
 
   function renderPhaseStrip(activeId) {
     const strip = $("#phaseStrip");
-    strip.innerHTML = D.PHASES.map((p) => {
-      const done = currentMonthStr() > p.end;
-      const active = p.id === activeId;
-      return `<div class="phase-dot ${active ? "active" : ""} ${done ? "done" : ""}" title="第${p.number}期"></div>`;
-    }).join("");
+    const now = currentMonthStr();
+    strip.innerHTML = getResolvedPhases()
+      .map((p) => {
+        const done = now > p.end;
+        const active = p.id === activeId;
+        return `<div class="phase-dot ${active ? "active" : ""} ${done ? "done" : ""}" title="第${p.number}期"></div>`;
+      })
+      .join("");
   }
 
   function renderMilestonePreview() {
-    const phaseId = D.getCurrentPhaseKey();
-    const phase = D.PHASES.find((p) => p.id === phaseId);
+    const phaseId = getActivePhaseKey();
+    const basePhase = D.PHASES.find((p) => p.id === phaseId);
+    const phase = basePhase ? resolvePhase(basePhase) : null;
     if (!phase) return;
     const ms = resolvePhaseMilestones(phase);
     const done = ms.filter((m) => m.done).length;
@@ -583,36 +638,49 @@
 
   /* ── Render: Roadmap ── */
   function renderRoadmap() {
+    const intro = getRoadmapIntro();
+    const titleEl = $("#roadmapIntroTitle");
+    const descEl = $("#roadmapIntroDesc");
+    if (titleEl) titleEl.textContent = intro.title;
+    if (descEl) descEl.textContent = intro.description;
+
     const bar = $("#timelineBar");
     const now = currentMonthStr();
-    bar.innerHTML = D.PHASES.map((p) => {
-      const past = now >= p.end;
-      const cur = now >= p.start && now <= p.end;
-      return `<div class="timeline-seg ${past || cur ? "past" : "future"}" style="background:${p.color}" title="${p.title}"></div>`;
-    }).join("");
+    const phases = getResolvedPhases();
+    bar.innerHTML = phases
+      .map((p) => {
+        const past = now >= p.end;
+        const cur = now >= p.start && now <= p.end;
+        return `<div class="timeline-seg ${past || cur ? "past" : "future"}" style="background:${p.color}" title="${escapeHtml(p.title)}"></div>`;
+      })
+      .join("");
 
     const container = $("#roadmapPhases");
-    container.innerHTML = D.PHASES.map((p) => {
-      const monthsHtml = p.months
-        .map((m) => {
-          const resolved = resolveMonth(m.key)?.month || m;
-          return `
+    container.innerHTML = phases
+      .map((p) => {
+        const basePhase = D.PHASES.find((x) => x.id === p.id);
+        const monthsHtml = (basePhase?.months || [])
+          .map((m) => {
+            const resolved = resolveMonth(m.key);
+            if (resolved?.month?.hidden) return "";
+            const month = resolved?.month || m;
+            return `
         <div class="month-block" data-month-key="${m.key}">
           <div class="month-block-head">
-            <h5><span>${m.label}</span>${escapeHtml(resolved.title)}</h5>
+            <h5><span>${escapeHtml(month.label)}</span>${escapeHtml(month.title)}</h5>
             <button type="button" class="icon-action" data-edit-month="${m.key}" title="月次計画を編集">✎</button>
           </div>
           <p class="muted small">行動</p>
-          <ul class="action-list">${resolved.actions.map((a) => `<li>${escapeHtml(a)}</li>`).join("")}</ul>
+          <ul class="action-list">${month.actions.map((a) => `<li>${escapeHtml(a)}</li>`).join("")}</ul>
           <p class="muted small">成果</p>
-          <ul class="outcome-list">${resolved.outcomes.map((o) => `<li>${escapeHtml(o)}</li>`).join("")}</ul>
+          <ul class="outcome-list">${month.outcomes.map((o) => `<li>${escapeHtml(o)}</li>`).join("")}</ul>
         </div>`;
-        })
-        .join("");
-      const msList = resolvePhaseMilestones(p);
-      const msHtml = msList
-        .map(
-          (m) => `
+          })
+          .join("");
+        const msList = resolvePhaseMilestones(basePhase);
+        const msHtml = msList
+          .map(
+            (m) => `
         <div class="ms-row" data-ms="${m.id}" data-custom="${m.isCustom}">
           <label style="flex:1;display:flex;align-items:center;gap:8px;">
             <input type="checkbox" data-ms-check="${m.id}" data-custom="${m.isCustom}" ${m.done ? "checked" : ""} />
@@ -621,9 +689,9 @@
           <button type="button" class="icon-action" data-ms-edit="${m.id}" data-custom="${m.isCustom}" data-phase="${p.id}" title="編集">✎</button>
           ${m.isCustom ? `<button type="button" class="icon-action danger" data-ms-del="${m.id}" title="削除">🗑</button>` : ""}
         </div>`
-        )
-        .join("");
-      return `
+          )
+          .join("");
+        return `
       <article class="phase-block" data-phase="${p.id}">
         <div class="phase-header" role="button" tabindex="0">
           <div class="phase-num" style="background:${p.color}">${p.number}</div>
@@ -632,6 +700,7 @@
             <p>${escapeHtml(p.period)} · ${escapeHtml(p.theme)}</p>
             <p class="phase-revenue">${escapeHtml(p.revenueLabel)}</p>
           </div>
+          <button type="button" class="icon-action" data-edit-phase="${p.id}" title="期間を編集">✎</button>
           <svg class="phase-chevron" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 9l6 6 6-6"/></svg>
         </div>
         <div class="phase-body">
@@ -645,12 +714,17 @@
           </div>
         </div>
       </article>`;
-    }).join("");
+      })
+      .join("");
 
     container.querySelectorAll(".phase-header").forEach((h) => {
       const toggle = () => h.closest(".phase-block").classList.toggle("open");
-      h.addEventListener("click", toggle);
+      h.addEventListener("click", (e) => {
+        if (e.target.closest("[data-edit-phase]")) return;
+        toggle();
+      });
       h.addEventListener("keydown", (e) => {
+        if (e.target.closest("[data-edit-phase]")) return;
         if (e.key === "Enter" || e.key === " ") {
           e.preventDefault();
           toggle();
@@ -658,7 +732,7 @@
       });
     });
 
-    const curPhase = D.getCurrentPhaseKey();
+    const curPhase = getActivePhaseKey();
     const openBlock = container.querySelector(`[data-phase="${curPhase}"]`);
     if (openBlock) openBlock.classList.add("open");
 
@@ -693,6 +767,111 @@
         openMonthPlanModal(btn.dataset.editMonth);
       });
     });
+    container.querySelectorAll("[data-edit-phase]").forEach((btn) => {
+      btn.addEventListener("click", (e) => {
+        e.stopPropagation();
+        openPhaseModal(btn.dataset.editPhase);
+      });
+    });
+  }
+
+  function openRoadmapIntroModal() {
+    const intro = getRoadmapIntro();
+    const hasCustom = !!data.roadmapIntro;
+    openModal(
+      "ロードマップ概要を編集",
+      `
+      <label class="field"><span>タイトル</span><input type="text" id="riTitle" class="input" value="${escapeHtml(intro.title)}" /></label>
+      <label class="field"><span>説明文</span><textarea id="riDesc" class="input" rows="4">${escapeHtml(intro.description)}</textarea></label>
+    `,
+      `<button type="button" class="btn btn-ghost btn-sm" id="modalReset" ${hasCustom ? "" : "hidden"}>初期値に戻す</button>
+       <button type="button" class="btn btn-ghost" id="modalCancel">キャンセル</button>
+       <button type="button" class="btn btn-primary" id="modalSave">保存</button>`
+    );
+    $("#modalCancel").onclick = closeModal;
+    $("#modalReset")?.addEventListener("click", () => {
+      const prev = data.roadmapIntro ? deepClone(data.roadmapIntro) : null;
+      data.roadmapIntro = null;
+      closeModal();
+      saveData();
+      toast("概要を初期値に戻しました", () => {
+        data.roadmapIntro = prev;
+        saveData();
+      });
+    });
+    $("#modalSave").onclick = () => {
+      const title = $("#riTitle").value.trim();
+      const description = $("#riDesc").value.trim();
+      if (!title || !description) return toast("タイトルと説明を入力してください");
+      data.roadmapIntro = { title, description };
+      closeModal();
+      saveData();
+      toast("ロードマップ概要を保存しました");
+    };
+  }
+
+  function openPhaseModal(phaseId) {
+    const base = D.PHASES.find((p) => p.id === phaseId);
+    if (!base) return;
+    const p = resolvePhase(base);
+    const ov = data.phaseOverrides[phaseId] || {};
+    const hasOverride = Object.keys(ov).length > 0;
+    openModal(
+      `第${p.number}期を編集`,
+      `
+      <label class="field"><span>期間タイトル</span><input type="text" id="phTitle" class="input" value="${escapeHtml(p.title)}" /></label>
+      <label class="field"><span>期間表記（例：2026年5月〜7月）</span><input type="text" id="phPeriod" class="input" value="${escapeHtml(p.period)}" /></label>
+      <label class="field"><span>テーマ</span><input type="text" id="phTheme" class="input" value="${escapeHtml(p.theme)}" /></label>
+      <label class="field"><span>月商目標ラベル</span><input type="text" id="phRevenueLabel" class="input" value="${escapeHtml(p.revenueLabel)}" /></label>
+      <div class="btn-row">
+        <label class="field" style="flex:1"><span>開始月</span><input type="month" id="phStart" class="input" value="${p.start}" /></label>
+        <label class="field" style="flex:1"><span>終了月</span><input type="month" id="phEnd" class="input" value="${p.end}" /></label>
+      </div>
+      <div class="btn-row">
+        <label class="field" style="flex:1"><span>月商下限（円）</span><input type="number" id="phRevMin" class="input" min="0" value="${p.revenueMin}" /></label>
+        <label class="field" style="flex:1"><span>月商上限（円）</span><input type="number" id="phRevMax" class="input" min="0" value="${p.revenueMax}" /></label>
+      </div>
+      <label class="field">
+        <span style="display:flex;align-items:center;gap:8px;font-size:0.88rem;">
+          <input type="checkbox" id="phHidden" ${p.hidden ? "checked" : ""} />
+          この期間をロードマップから非表示にする
+        </span>
+      </label>
+    `,
+      `<button type="button" class="btn btn-ghost btn-sm" id="modalReset" ${hasOverride ? "" : "hidden"}>初期値に戻す</button>
+       <button type="button" class="btn btn-ghost" id="modalCancel">キャンセル</button>
+       <button type="button" class="btn btn-primary" id="modalSave">保存</button>`
+    );
+    $("#modalCancel").onclick = closeModal;
+    $("#modalReset")?.addEventListener("click", () => {
+      const prev = data.phaseOverrides[phaseId] ? deepClone(data.phaseOverrides[phaseId]) : null;
+      delete data.phaseOverrides[phaseId];
+      closeModal();
+      saveData();
+      toast("第" + p.number + "期を初期値に戻しました", () => {
+        if (prev) data.phaseOverrides[phaseId] = prev;
+        else delete data.phaseOverrides[phaseId];
+        saveData();
+      });
+    });
+    $("#modalSave").onclick = () => {
+      const title = $("#phTitle").value.trim();
+      if (!title) return toast("タイトルを入力してください");
+      data.phaseOverrides[phaseId] = {
+        title,
+        period: $("#phPeriod").value.trim(),
+        theme: $("#phTheme").value.trim(),
+        revenueLabel: $("#phRevenueLabel").value.trim(),
+        start: $("#phStart").value,
+        end: $("#phEnd").value,
+        revenueMin: parseNum($("#phRevMin").value),
+        revenueMax: parseNum($("#phRevMax").value),
+        hidden: $("#phHidden").checked,
+      };
+      closeModal();
+      saveData();
+      toast("期間計画を保存しました");
+    };
   }
 
   /* ── Render: KPI ── */
@@ -834,15 +1013,21 @@
   function openMonthPlanModal(monthKey) {
     const resolved = resolveMonth(monthKey);
     if (!resolved) return;
-    const ov = data.monthOverrides[monthKey] || {};
-    const hasOverride = !!data.monthOverrides[monthKey];
+    const base = D.getMonthPlan(monthKey)?.month;
+    const hasOverride =
+      !!data.monthOverrides[monthKey] || data.monthTargetOverrides[monthKey] != null;
     openModal(
       `${resolved.month.label}の計画を編集`,
       `
+      <label class="field"><span>月ラベル（例：5月）</span><input type="text" id="mpLabel" class="input" value="${escapeHtml(resolved.month.label)}" /></label>
       <label class="field"><span>タイトル</span><input type="text" id="mpTitle" class="input" value="${escapeHtml(resolved.month.title)}" /></label>
       <label class="field"><span>行動（1行1項目）</span><textarea id="mpActions" class="input" rows="4">${escapeHtml(resolved.month.actions.join("\n"))}</textarea></label>
       <label class="field"><span>成果（1行1項目）</span><textarea id="mpOutcomes" class="input" rows="3">${escapeHtml(resolved.month.outcomes.join("\n"))}</textarea></label>
-      <label class="field"><span>月商目標（円・空欄でデフォルト）</span><input type="number" id="mpTarget" class="input" min="0" step="1000" value="${data.monthTargetOverrides[monthKey] ?? ""}" placeholder="${getMonthTarget(monthKey)}" /></label>
+      <label class="field"><span>月商目標（円・空欄でデフォルト）</span><input type="number" id="mpTarget" class="input" min="0" step="1000" value="${data.monthTargetOverrides[monthKey] ?? ""}" placeholder="${base ? getMonthTarget(monthKey) : ""}" /></label>
+      <label style="display:flex;align-items:center;gap:8px;font-size:0.88rem;margin-top:8px;">
+        <input type="checkbox" id="mpHidden" ${resolved.month.hidden ? "checked" : ""} />
+        この月をロードマップから非表示にする
+      </label>
       <p class="muted small">デフォルトの計画に戻す場合は「初期値に戻す」を押してください。</p>
     `,
       `<button type="button" class="btn btn-ghost btn-sm" id="modalReset" ${hasOverride || data.monthTargetOverrides[monthKey] != null ? "" : "hidden"}>初期値に戻す</button>
@@ -866,11 +1051,24 @@
       });
     });
     $("#modalSave").onclick = () => {
+      const label = $("#mpLabel").value.trim();
       const title = $("#mpTitle").value.trim();
-      const actions = $("#mpActions").value.split("\n").map((s) => s.trim()).filter(Boolean);
-      const outcomes = $("#mpOutcomes").value.split("\n").map((s) => s.trim()).filter(Boolean);
+      const actions = $("#mpActions").value
+        .split("\n")
+        .map((s) => s.trim())
+        .filter(Boolean);
+      const outcomes = $("#mpOutcomes").value
+        .split("\n")
+        .map((s) => s.trim())
+        .filter(Boolean);
       const targetRaw = $("#mpTarget").value;
-      data.monthOverrides[monthKey] = { title, actions, outcomes };
+      data.monthOverrides[monthKey] = {
+        label,
+        title,
+        actions,
+        outcomes,
+        hidden: $("#mpHidden").checked,
+      };
       if (targetRaw === "") delete data.monthTargetOverrides[monthKey];
       else data.monthTargetOverrides[monthKey] = parseNum(targetRaw);
       closeModal();
@@ -1778,6 +1976,7 @@
     $("#addRecordBtn").addEventListener("click", () => openRecordModal());
     $("#editMonthTargetBtn")?.addEventListener("click", openMonthTargetModal);
     $("#editFocusBtn")?.addEventListener("click", () => openMonthPlanModal(currentMonthStr()));
+    $("#editRoadmapIntroBtn")?.addEventListener("click", openRoadmapIntroModal);
     $("#addSalesLogBtn").addEventListener("click", () => openSalesLogModal());
     $("#addDmTemplateBtn")?.addEventListener("click", () => openDmTemplateModal(null, true));
     $("#addClientBtn").addEventListener("click", () => openClientModal());
