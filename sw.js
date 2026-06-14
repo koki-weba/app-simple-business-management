@@ -1,5 +1,5 @@
-/* Service Worker — ネットワーク優先（ホーム画面追加後も最新版を取得） */
-const CACHE = "startup-roadmap-v6";
+/* Service Worker — ネットワーク優先 + version.json は常にサーバーから取得 */
+const CACHE = "startup-roadmap-v7";
 const SHELL = [
   "./index.html",
   "./styles.css",
@@ -70,6 +70,11 @@ self.addEventListener("fetch", (e) => {
   const url = new URL(e.request.url);
   if (e.request.method !== "GET") return;
   if (url.origin !== location.origin) return;
+
+  if (url.pathname.endsWith("/version.json") || url.pathname.endsWith("version.json")) {
+    e.respondWith(fetch(e.request, { cache: "no-store" }));
+    return;
+  }
 
   if (e.request.mode === "navigate" || NETWORK_FIRST.test(url.pathname)) {
     e.respondWith(networkFirst(e.request));

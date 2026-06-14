@@ -98,6 +98,11 @@ body {
 
 .version-line strong { color: var(--blue-700); }
 
+.version-line strong.version-new,
+#serverVersionLabel.version-new {
+  color: var(--danger);
+}
+
 .app-shell {
   max-width: 480px;
   margin: 0 auto;

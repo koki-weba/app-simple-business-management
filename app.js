@@ -4,7 +4,7 @@
 
   const D = window.StartupDefaults;
   const STORAGE_KEY = D.STORAGE_KEY;
-  const APP_VERSION = 6;
+  const APP_VERSION = 7;
   const CIRC = 326.7;
 
   const PAGE_META = {
@@ -25,6 +25,7 @@
   let undoCallback = null;
   let swRegistration = null;
   let swReloading = false;
+  let serverVersionRemote = null;
 
   const ENTITY_LABELS = {
     client: "案件",
@@ -506,6 +507,7 @@
     $("#page-subtitle").textContent = meta.sub;
     updateNavIndicator(view);
     if (view === "kpi") renderChart();
+    if (view === "settings") compareWithServerVersion(false);
     window.scrollTo({ top: 0, behavior: prefersReducedMotion() ? "auto" : "smooth" });
   }
 
@@ -1652,6 +1654,43 @@
     renderArchives();
     const verEl = $("#appVersionLabel");
     if (verEl) verEl.textContent = `v${APP_VERSION}`;
+    const serverEl = $("#serverVersionLabel");
+    if (serverEl) {
+      serverEl.textContent = serverVersionRemote != null ? `v${serverVersionRemote}` : "未確認";
+      if (serverVersionRemote != null && serverVersionRemote > APP_VERSION) {
+        serverEl.classList.add("version-new");
+      } else {
+        serverEl.classList.remove("version-new");
+      }
+    }
+  }
+
+  async function fetchServerVersion() {
+    try {
+      const res = await fetch(`./version.json?t=${Date.now()}`, { cache: "no-store" });
+      if (!res.ok) return null;
+      const json = await res.json();
+      const v = parseInt(json.version, 10);
+      return isNaN(v) ? null : v;
+    } catch {
+      return null;
+    }
+  }
+
+  async function compareWithServerVersion(showToast) {
+    const remote = await fetchServerVersion();
+    serverVersionRemote = remote;
+    renderSettings();
+    if (remote != null && remote > APP_VERSION) {
+      showUpdateBanner(swRegistration);
+      if (showToast) {
+        toast(
+          `新しいバージョンがあります（サーバー v${remote} / この端末 v${APP_VERSION}）。「更新する」または「キャッシュを消去」を押してください`
+        );
+      }
+      return true;
+    }
+    return false;
   }
 
   /* ── Service Worker / 更新 ── */
@@ -1676,12 +1715,31 @@
       toast("更新を適用しています…");
       return;
     }
+    if (serverVersionRemote != null && serverVersionRemote > APP_VERSION) {
+      forceClearCacheAndReload(true);
+      return;
+    }
     window.location.reload();
   }
 
   async function checkForAppUpdate(showToast = true) {
+    const remoteFirst = await fetchServerVersion();
+    serverVersionRemote = remoteFirst;
+    renderSettings();
+
+    if (remoteFirst != null && remoteFirst > APP_VERSION) {
+      showUpdateBanner(swRegistration);
+      if (showToast) {
+        toast(
+          `新しいバージョンがあります（サーバー v${remoteFirst} / この端末 v${APP_VERSION}）`
+        );
+      }
+    }
+
     if (!("serviceWorker" in navigator)) {
-      if (showToast) toast("この環境では自動更新に対応していません");
+      if (showToast && !(remoteFirst != null && remoteFirst > APP_VERSION)) {
+        toast("この環境では自動更新に対応していません");
+      }
       return;
     }
     try {
@@ -1693,17 +1751,26 @@
       await reg.update();
       if (reg.waiting) {
         showUpdateBanner(reg);
-        if (showToast) toast("新しいバージョンがあります。「更新する」を押してください");
-      } else if (showToast) {
-        toast("最新版を使用中です（v" + APP_VERSION + "）");
+        if (showToast) {
+          toast("新しいバージョンがあります。「更新する」を押してください");
+        }
+      } else if (showToast && !(remoteFirst != null && remoteFirst > APP_VERSION)) {
+        toast(`最新版を使用中です（v${APP_VERSION}）`);
       }
     } catch {
-      if (showToast) toast("更新の確認に失敗しました");
+      if (showToast && !(remoteFirst != null && remoteFirst > APP_VERSION)) {
+        toast("更新の確認に失敗しました。キャッシュを消去をお試しください");
+      }
     }
   }
 
-  async function forceClearCacheAndReload() {
-    if (!confirm("キャッシュを消去して最新版を読み込みます。データは端末に残ります。続行しますか？")) return;
+  async function forceClearCacheAndReload(skipConfirm = false) {
+    if (
+      !skipConfirm &&
+      !confirm("キャッシュを消去して最新版を読み込みます。データは端末に残ります。続行しますか？")
+    ) {
+      return;
+    }
     try {
       if ("serviceWorker" in navigator) {
         const regs = await navigator.serviceWorker.getRegistrations();
@@ -1749,8 +1816,13 @@
 
       await reg.update();
 
+      compareWithServerVersion(false);
+
       document.addEventListener("visibilitychange", () => {
-        if (document.visibilityState === "visible") reg.update();
+        if (document.visibilityState === "visible") {
+          reg.update();
+          compareWithServerVersion(false);
+        }
       });
 
       setInterval(() => reg.update(), 60 * 60 * 1000);
