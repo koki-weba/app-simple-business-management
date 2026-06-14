@@ -4,7 +4,7 @@
 
   const D = window.StartupDefaults;
   const STORAGE_KEY = D.STORAGE_KEY;
-  const APP_VERSION = 7;
+  const APP_VERSION = 8;
   const CIRC = 326.7;
 
   const PAGE_META = {
@@ -170,6 +170,51 @@
         doneAt: m.doneAt ?? null,
       }));
     return [...defaults, ...custom];
+  }
+
+  function isMonthTaskDone(monthKey, idx) {
+    return !!data.monthTaskChecks[monthKey]?.[String(idx)];
+  }
+
+  function setMonthTaskDone(monthKey, idx, done) {
+    if (!data.monthTaskChecks[monthKey]) data.monthTaskChecks[monthKey] = {};
+    if (done) data.monthTaskChecks[monthKey][String(idx)] = true;
+    else delete data.monthTaskChecks[monthKey][String(idx)];
+  }
+
+  function toggleMonthTask(monthKey, idx, done) {
+    const wasDone = isMonthTaskDone(monthKey, idx);
+    setMonthTaskDone(monthKey, idx, done);
+    saveData(false);
+    toast(done ? "タスクを完了にしました" : "タスクを未完了に戻しました", () => {
+      setMonthTaskDone(monthKey, idx, wasDone);
+      saveData();
+    });
+    renderHome();
+    renderRoadmap();
+  }
+
+  function renderMonthTaskList(monthKey, actions) {
+    return actions
+      .map((a, i) => {
+        const done = isMonthTaskDone(monthKey, i);
+        return `
+      <li class="check-row">
+        <label class="month-task-row">
+          <input type="checkbox" class="month-task-check" data-month="${monthKey}" data-idx="${i}" ${done ? "checked" : ""} />
+          <span class="month-task-text ${done ? "done" : ""}">${escapeHtml(a)}</span>
+        </label>
+      </li>`;
+      })
+      .join("");
+  }
+
+  function bindMonthTaskChecks(root) {
+    (root || document).querySelectorAll(".month-task-check").forEach((cb) => {
+      cb.addEventListener("change", () => {
+        toggleMonthTask(cb.dataset.month, parseInt(cb.dataset.idx, 10), cb.checked);
+      });
+    });
   }
 
   function getActiveTasks() {
@@ -563,9 +608,9 @@
       $("#currentMonthBadge").textContent = plan.month.label;
       $("#focusTitle").textContent = plan.month.title;
       const ul = $("#focusActions");
-      ul.innerHTML = plan.month.actions
-        .map((a) => `<li>${escapeHtml(a)}</li>`)
-        .join("");
+      ul.className = "focus-list check-list";
+      ul.innerHTML = renderMonthTaskList(month, plan.month.actions);
+      bindMonthTaskChecks(ul);
     }
 
     renderPhaseStrip(phaseId);
@@ -673,7 +718,7 @@
             <button type="button" class="icon-action" data-edit-month="${m.key}" title="月次計画を編集">✎</button>
           </div>
           <p class="muted small">タスク</p>
-          <ul class="action-list">${month.actions.map((a) => `<li>${escapeHtml(a)}</li>`).join("")}</ul>
+          <ul class="action-list check-list">${renderMonthTaskList(m.key, month.actions)}</ul>
           <p class="muted small">達成</p>
           <ul class="outcome-list">${month.outcomes.map((o) => `<li>${escapeHtml(o)}</li>`).join("")}</ul>
         </div>`;
@@ -775,6 +820,7 @@
         openPhaseModal(btn.dataset.editPhase);
       });
     });
+    bindMonthTaskChecks(container);
   }
 
   function openRoadmapIntroModal() {

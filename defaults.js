@@ -453,6 +453,7 @@
       customDmTemplates: [],
       hiddenDmTemplateIds: [],
       deletedDefaultTaskIds: [],
+      monthTaskChecks: {},
     };
   }
 
@@ -476,6 +477,8 @@
     out.customDmTemplates = Array.isArray(saved.customDmTemplates) ? saved.customDmTemplates : [];
     out.hiddenDmTemplateIds = Array.isArray(saved.hiddenDmTemplateIds) ? saved.hiddenDmTemplateIds : [];
     out.deletedDefaultTaskIds = Array.isArray(saved.deletedDefaultTaskIds) ? saved.deletedDefaultTaskIds : [];
+    out.monthTaskChecks =
+      saved.monthTaskChecks && typeof saved.monthTaskChecks === "object" ? saved.monthTaskChecks : {};
 
     out.profile = { ...base.profile, ...(saved.profile || {}) };
     out.settings = { ...base.settings, ...(saved.settings || {}) };

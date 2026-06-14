@@ -628,6 +628,44 @@ body {
   margin: 8px 0;
 }
 
+.action-list.check-list li,
+.focus-list.check-list li {
+  padding: 8px 0;
+  padding-left: 0;
+}
+
+.action-list.check-list li::before,
+.focus-list.check-list li::before {
+  display: none;
+}
+
+.month-task-row {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  cursor: pointer;
+  width: 100%;
+}
+
+.month-task-check {
+  width: 20px;
+  height: 20px;
+  margin-top: 2px;
+  accent-color: var(--blue-600);
+  flex-shrink: 0;
+  cursor: pointer;
+}
+
+.month-task-text {
+  flex: 1;
+  line-height: 1.5;
+}
+
+.month-task-text.done {
+  text-decoration: line-through;
+  color: var(--slate-400);
+}
+
 .action-list li, .outcome-list li {
   font-size: 0.8rem;
   color: var(--slate-600);
