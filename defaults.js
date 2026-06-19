@@ -454,6 +454,14 @@
       hiddenDmTemplateIds: [],
       deletedDefaultTaskIds: [],
       monthTaskChecks: {},
+      sync: {
+        enabled: false,
+        syncId: "",
+        lastSyncAt: null,
+        lastSyncStatus: "idle",
+        lastSyncMessage: "",
+      },
+      _meta: { deviceId: "", updatedAt: null },
     };
   }
 
@@ -479,6 +487,9 @@
     out.deletedDefaultTaskIds = Array.isArray(saved.deletedDefaultTaskIds) ? saved.deletedDefaultTaskIds : [];
     out.monthTaskChecks =
       saved.monthTaskChecks && typeof saved.monthTaskChecks === "object" ? saved.monthTaskChecks : {};
+
+    out.sync = { ...base.sync, ...(saved.sync || {}) };
+    out._meta = { ...base._meta, ...(saved._meta || {}) };
 
     out.profile = { ...base.profile, ...(saved.profile || {}) };
     out.settings = { ...base.settings, ...(saved.settings || {}) };

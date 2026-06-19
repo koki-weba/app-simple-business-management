@@ -4,7 +4,7 @@
 
   const D = window.StartupDefaults;
   const STORAGE_KEY = D.STORAGE_KEY;
-  const APP_VERSION = 9;
+  const APP_VERSION = 11;
   const CIRC = 326.7;
 
   const PAGE_META = {
@@ -26,6 +26,7 @@
   let swRegistration = null;
   let swReloading = false;
   let serverVersionRemote = null;
+  let cloudPushPaused = false;
 
   const ENTITY_LABELS = {
     client: "案件",
@@ -67,7 +68,14 @@
     window.matchMedia("(prefers-reduced-motion: reduce)").matches;
 
   /* ── Storage（アプリ更新と独立したユーザーデータキー） ── */
-  function loadData() {
+  function touchMeta() {
+    if (!data) return;
+    if (!data._meta) data._meta = {};
+    data._meta.deviceId = window.CloudSync?.getDeviceId?.() || data._meta.deviceId || "";
+    data._meta.updatedAt = new Date().toISOString();
+  }
+
+  function loadDataLocal() {
     try {
       const raw = localStorage.getItem(STORAGE_KEY);
       const saved = raw ? JSON.parse(raw) : null;
@@ -75,17 +83,169 @@
     } catch {
       data = D.createDefaultUserData();
     }
-    saveData(false);
+    touchMeta();
+    try {
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
+    } catch (_) {}
+  }
+
+  function loadData() {
+    loadDataLocal();
   }
 
   function saveData(render = true) {
+    touchMeta();
     try {
       localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
     } catch (e) {
       toast("保存に失敗しました。ストレージ容量を確認してください。");
       console.error(e);
     }
+    if (
+      !cloudPushPaused &&
+      data.sync?.enabled &&
+      data.sync.syncId &&
+      window.CloudSync?.isConfigured?.()
+    ) {
+      const syncId = data.sync.syncId;
+      CloudSync.schedulePush(syncId, () => JSON.parse(JSON.stringify(data)));
+      data.sync.lastSyncStatus = "pending";
+    }
     if (render) renderAll();
+  }
+
+  async function applyRemoteCloud(remoteDoc, silent) {
+    if (!remoteDoc?.payload) return false;
+    const remotePayload = remoteDoc.payload;
+    const localMs = new Date(data._meta?.updatedAt || 0).getTime();
+    const remoteMs =
+      remoteDoc.updatedAtMs || new Date(remotePayload._meta?.updatedAt || 0).getTime();
+    if (remoteMs <= localMs) return false;
+
+    CloudSync.setApplyingRemote(true);
+    try {
+      data = D.migrateUserData(remotePayload);
+      touchMeta();
+      cloudPushPaused = true;
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
+      cloudPushPaused = false;
+      if (!data.sync) data.sync = {};
+      data.sync.lastSyncAt = new Date().toISOString();
+      data.sync.lastSyncStatus = "ok";
+      data.sync.lastSyncMessage = "クラウドから取得";
+      if (!silent) toast("クラウドからデータを同期しました");
+      renderAll();
+      return true;
+    } finally {
+      CloudSync.setApplyingRemote(false);
+    }
+  }
+
+  async function syncPullNow(showToast = true) {
+    if (!data.sync?.syncId) {
+      if (showToast) toast("同期IDを入力してください");
+      return;
+    }
+    if (!CloudSync.isConfigured()) {
+      if (showToast) toast("Firebaseが未設定です。firebase-config.js を設定してください");
+      return;
+    }
+    data.sync.lastSyncStatus = "syncing";
+    renderSyncSettings();
+    try {
+      await CloudSync.init();
+      const remote = await CloudSync.pull(data.sync.syncId);
+      const payload = JSON.parse(JSON.stringify(data));
+      if (!remote) {
+        await CloudSync.push(data.sync.syncId, payload);
+        data.sync.lastSyncMessage = "クラウドに初回アップロード";
+        if (showToast) toast("クラウドにデータをアップロードしました");
+      } else {
+        const merged = await applyRemoteCloud(remote, true);
+        if (!merged) {
+          await CloudSync.push(data.sync.syncId, payload);
+          data.sync.lastSyncMessage = "ローカルが最新";
+          if (showToast) toast("ローカルが最新です");
+        } else if (showToast) {
+          toast("クラウドから同期しました");
+        }
+      }
+      data.sync.lastSyncAt = new Date().toISOString();
+      data.sync.lastSyncStatus = "ok";
+      CloudSync.startWatch(data.sync.syncId);
+      cloudPushPaused = true;
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
+      cloudPushPaused = false;
+    } catch (e) {
+      data.sync.lastSyncStatus = "error";
+      data.sync.lastSyncMessage = e.message || "同期エラー";
+      if (showToast) toast("同期に失敗しました");
+    }
+    renderSyncSettings();
+  }
+
+  function renderSyncSettings() {
+    const statusEl = $("#syncStatusText");
+    if (!statusEl || !data.sync) return;
+    if (!CloudSync.isConfigured()) {
+      statusEl.textContent = "Firebase未設定 — firebase-config.js の enabled を true にし、キーを入力してください";
+      statusEl.className = "sync-status sync-warn";
+    } else {
+      const labels = { idle: "待機中", pending: "送信待ち", syncing: "同期中", ok: "同期済み", error: "エラー" };
+      let text = labels[data.sync.lastSyncStatus] || data.sync.lastSyncStatus;
+      if (data.sync.lastSyncMessage) text += " — " + data.sync.lastSyncMessage;
+      if (data.sync.lastSyncAt) text += "（" + data.sync.lastSyncAt.slice(0, 16).replace("T", " ") + "）";
+      statusEl.textContent = text;
+      statusEl.className =
+        "sync-status " +
+        (data.sync.lastSyncStatus === "error" ? "sync-error" : data.sync.lastSyncStatus === "ok" ? "sync-ok" : "");
+    }
+    const idInput = $("#syncIdInput");
+    if (idInput && document.activeElement !== idInput) idInput.value = data.sync.syncId || "";
+    const en = $("#syncEnabled");
+    if (en) en.checked = !!data.sync.enabled;
+  }
+
+  function saveSyncSettings() {
+    if (!window.CloudSync) return;
+    const enabled = !!$("#syncEnabled")?.checked;
+    let syncId = ($("#syncIdInput")?.value || "").trim();
+    if (enabled && !syncId) syncId = CloudSync.generateSyncId();
+    const wasEnabled = data.sync.enabled;
+    const oldId = data.sync.syncId;
+    data.sync.enabled = enabled;
+    data.sync.syncId = syncId;
+    if ($("#syncIdInput")) $("#syncIdInput").value = syncId;
+    saveData(false);
+    if (enabled && CloudSync.isConfigured()) {
+      if (!wasEnabled || oldId !== syncId) {
+        syncPullNow(false);
+      } else {
+        CloudSync.startWatch(syncId);
+      }
+    } else if (!enabled) {
+      CloudSync.stopWatch?.();
+    }
+    renderSyncSettings();
+    toast(enabled ? "クラウド同期を有効にしました" : "クラウド同期をオフにしました");
+  }
+
+  function copySyncId() {
+    const id = data.sync?.syncId || $("#syncIdInput")?.value;
+    if (!id) return toast("同期IDがありません");
+    navigator.clipboard?.writeText(id).then(
+      () => toast("同期IDをコピーしました"),
+      () => toast("コピーに失敗しました")
+    );
+  }
+
+  async function bootstrapCloud() {
+    CloudSync.setMergeHandler((ev) => {
+      if (ev.type === "remote") applyRemoteCloud(ev.data, false);
+    });
+    if (!CloudSync.isConfigured() || !data.sync?.enabled || !data.sync.syncId) return;
+    await CloudSync.init();
+    await syncPullNow(false);
   }
 
   /* ── 可逆性: ゴミ箱・アーカイブ・マージ ── */
@@ -1410,6 +1570,7 @@
           (c) => `
         <div class="client-item" data-id="${c.id}">
           <h4>${escapeHtml(c.name)}</h4>
+          ${c.memo?.trim() ? `<p class="client-memo">${escapeHtml(c.memo)}</p>` : ""}
           <div class="client-tags">
             <span class="tag ${c.status}">${statusLabel(c.status)}</span>
             ${c.projectFee ? `<span class="tag">制作 ${formatYen(c.projectFee, true)}</span>` : ""}
@@ -1421,22 +1582,6 @@
       list.querySelectorAll(".client-item").forEach((el) => {
         el.addEventListener("click", () => openClientModal(el.dataset.id));
       });
-    }
-
-    const testimonials = data.clients.filter((c) => c.testimonial?.trim());
-    const tList = $("#testimonialList");
-    if (!testimonials.length) {
-      tList.innerHTML = '<p class="empty-state">お客様の声を案件に登録するとここに表示されます</p>';
-    } else {
-      tList.innerHTML = testimonials
-        .map(
-          (c) => `
-        <blockquote class="testimonial-card">
-          ${escapeHtml(c.testimonial)}
-          <cite>— ${escapeHtml(c.name)}</cite>
-        </blockquote>`
-        )
-        .join("");
     }
   }
 
@@ -1459,8 +1604,7 @@
       </label>
       <label class="field"><span>制作費（円）</span><input type="number" id="cProject" class="input" min="0" value="${c?.projectFee ?? ""}" /></label>
       <label class="field"><span>月額継続（円）</span><input type="number" id="cRecurring" class="input" min="0" value="${c?.recurringFee ?? ""}" /></label>
-      <label class="field"><span>お客様の声</span><textarea id="cTestimonial" class="input" placeholder="〇〇院長にも喜ばれました！">${escapeHtml(c?.testimonial ?? "")}</textarea></label>
-      <label class="field"><span>メモ</span><textarea id="cMemo" class="input">${escapeHtml(c?.memo ?? "")}</textarea></label>
+      <label class="field"><span>メモ</span><textarea id="cMemo" class="input" placeholder="連絡先・納品予定・メモなど">${escapeHtml(c?.memo ?? "")}</textarea></label>
     `,
       `<button type="button" class="btn btn-danger btn-sm" id="modalDelete" ${c ? "" : "hidden"}>削除</button>
        <button type="button" class="btn btn-ghost" id="modalCancel">キャンセル</button>
@@ -1485,7 +1629,6 @@
         status: $("#cStatus").value,
         projectFee: parseNum($("#cProject").value),
         recurringFee: parseNum($("#cRecurring").value),
-        testimonial: $("#cTestimonial").value.trim(),
         memo: $("#cMemo").value.trim(),
         phaseId: D.getCurrentPhaseKey(),
         updatedAt: new Date().toISOString(),
@@ -1698,6 +1841,7 @@
     if ($("#simRate")) $("#simRate").value = rate;
     renderTrash();
     renderArchives();
+    renderSyncSettings();
     const verEl = $("#appVersionLabel");
     if (verEl) verEl.textContent = `v${APP_VERSION}`;
     const serverEl = $("#serverVersionLabel");
@@ -1868,6 +2012,9 @@
         if (document.visibilityState === "visible") {
           reg.update();
           compareWithServerVersion(false);
+          if (data.sync?.enabled && data.sync.syncId && CloudSync.isConfigured()) {
+            syncPullNow(false);
+          }
         }
       });
 
@@ -2038,8 +2185,10 @@
   }
 
   /* ── Init ── */
-  function init() {
-    loadData();
+  async function init() {
+    loadDataLocal();
+
+    await bootstrapCloud();
 
     $$(".nav-btn").forEach((b) => {
       b.addEventListener("click", () => switchView(b.dataset.nav));
@@ -2112,6 +2261,15 @@
     $("#notifBtn").addEventListener("click", showFocusAlert);
     $("#checkUpdateBtn")?.addEventListener("click", () => checkForAppUpdate(true));
     $("#forceUpdateBtn")?.addEventListener("click", forceClearCacheAndReload);
+    $("#syncEnabled")?.addEventListener("change", saveSyncSettings);
+    $("#saveSyncBtn")?.addEventListener("click", saveSyncSettings);
+    $("#syncNowBtn")?.addEventListener("click", () => syncPullNow(true));
+    $("#copySyncIdBtn")?.addEventListener("click", copySyncId);
+    $("#newSyncIdBtn")?.addEventListener("click", () => {
+      if (!confirm("新しい同期IDを発行しますか？別のIDは別データになります。")) return;
+      $("#syncIdInput").value = CloudSync.generateSyncId();
+      saveSyncSettings();
+    });
 
     $$("#chartRangeSeg .seg-btn").forEach((btn) => {
       btn.addEventListener("click", () => {
@@ -2178,6 +2336,6 @@
   }
 
   if (document.readyState === "loading") {
-    document.addEventListener("DOMContentLoaded", init);
+    document.addEventListener("DOMContentLoaded", () => init());
   } else init();
 })();

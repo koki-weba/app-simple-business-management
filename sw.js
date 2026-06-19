@@ -1,10 +1,12 @@
 /* Service Worker — ネットワーク優先 + version.json は常にサーバーから取得 */
-const CACHE = "startup-roadmap-v9";
+const CACHE = "startup-roadmap-v11";
 const SHELL = [
   "./index.html",
   "./styles.css",
   "./app.js",
   "./defaults.js",
+  "./sync.js",
+  "./firebase-config.js",
   "./manifest.json",
   "./icons/icon.svg",
 ];
