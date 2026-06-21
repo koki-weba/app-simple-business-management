@@ -466,6 +466,31 @@
     };
   }
 
+  function normalizeSnsLog(log) {
+    if (!log || typeof log !== "object") return log;
+    const ig = log.instagram && typeof log.instagram === "object" ? log.instagram : {};
+    const sl = log.sales && typeof log.sales === "object" ? log.sales : {};
+    const num = (v) => {
+      const n = Number(v);
+      return isNaN(n) ? 0 : n;
+    };
+    return {
+      ...log,
+      instagram: {
+        views: num(ig.views),
+        reach: num(ig.reach),
+        profileAccess: num(ig.profileAccess),
+        linkTaps: num(ig.linkTaps),
+      },
+      sales: {
+        dmSent: num(sl.dmSent),
+        replies: num(sl.replies),
+        meetings: num(sl.meetings),
+        orders: num(sl.orders),
+      },
+    };
+  }
+
   function migrateUserData(saved) {
     const base = createDefaultUserData();
     if (!saved || typeof saved !== "object") return base;
@@ -511,7 +536,7 @@
     out.monthlyRecords = Array.isArray(saved.monthlyRecords) ? saved.monthlyRecords : [];
     out.clients = Array.isArray(saved.clients) ? saved.clients : [];
     out.salesLogs = Array.isArray(saved.salesLogs) ? saved.salesLogs : [];
-    out.snsLogs = Array.isArray(saved.snsLogs) ? saved.snsLogs : [];
+    out.snsLogs = Array.isArray(saved.snsLogs) ? saved.snsLogs.map(normalizeSnsLog) : [];
     out.customTasks = Array.isArray(saved.customTasks) ? saved.customTasks : [];
     out.notes = Array.isArray(saved.notes) ? saved.notes : [];
     out.journal = Array.isArray(saved.journal) ? saved.journal : [];

@@ -594,33 +594,32 @@
           labels,
           datasets: [
             {
-              label: "リーチ",
-              data: slice.map((l) => l.instagram?.reach ?? 0),
-              borderColor: "#e1306c",
-              backgroundColor: "rgba(225,48,108,0.08)",
+              label: "閲覧数",
+              data: slice.map((l) => l.instagram?.views ?? 0),
+              borderColor: "#405de6",
+              backgroundColor: "rgba(64,93,230,0.08)",
               fill: true,
               tension: 0.35,
               yAxisID: "yL",
             },
             {
-              label: "プロフィール閲覧",
-              data: slice.map((l) => l.instagram?.profileAccess ?? 0),
-              borderColor: "#833ab4",
+              label: "リーチ",
+              data: slice.map((l) => l.instagram?.reach ?? 0),
+              borderColor: "#e1306c",
               tension: 0.35,
               yAxisID: "yL",
             },
             {
-              label: "外部リンクタップ",
-              data: slice.map((l) => l.instagram?.linkTaps ?? 0),
-              borderColor: "#fd1d1d",
-              borderDash: [4, 3],
+              label: "プロフィールへのアクセス",
+              data: slice.map((l) => l.instagram?.profileAccess ?? 0),
+              borderColor: "#833ab4",
               tension: 0.35,
               yAxisID: "yR",
             },
             {
-              label: "フォロワー増加",
-              data: slice.map((l) => l.instagram?.followerGain ?? 0),
-              borderColor: "#405de6",
+              label: "外部リンクのタップ数",
+              data: slice.map((l) => l.instagram?.linkTaps ?? 0),
+              borderColor: "#fd1d1d",
               borderDash: [4, 3],
               tension: 0.35,
               yAxisID: "yR",
@@ -684,12 +683,6 @@
               borderRadius: 3,
             },
             {
-              label: "見積",
-              data: slice.map((l) => l.sales?.quotes ?? 0),
-              backgroundColor: "rgba(139,92,246,0.72)",
-              borderRadius: 3,
-            },
-            {
               label: "受注",
               data: slice.map((l) => l.sales?.orders ?? 0),
               backgroundColor: "rgba(239,68,68,0.82)",
@@ -739,7 +732,7 @@
           <div class="log-item-body">
             <div class="log-date">${getWeekLabel(l.weekStart)}</div>
             <div class="log-body sns-summary-row">
-              <span class="sns-chip sns-chip--ig">📱 リーチ ${(ig.reach ?? 0).toLocaleString()} ／ ↑${ig.followerGain ?? 0}</span>
+              <span class="sns-chip sns-chip--ig">📱 閲覧 ${(ig.views ?? 0).toLocaleString()} ／ リーチ ${(ig.reach ?? 0).toLocaleString()}</span>
               <span class="sns-chip sns-chip--sl">💼 DM${sl.dmSent ?? 0} → 受注${sl.orders ?? 0}</span>
             </div>
           </div>
@@ -781,10 +774,10 @@
       <div class="sns-modal-section">
         <p class="sns-modal-label">📱 Instagram</p>
         <div class="sns-form-grid">
+          <label class="field"><span>閲覧数</span><input type="number" id="snsIgViews" class="input" min="0" value="${ig.views ?? ""}" placeholder="0" /></label>
           <label class="field"><span>リーチ</span><input type="number" id="snsIgReach" class="input" min="0" value="${ig.reach ?? ""}" placeholder="0" /></label>
-          <label class="field"><span>プロフィール閲覧</span><input type="number" id="snsIgProfile" class="input" min="0" value="${ig.profileAccess ?? ""}" placeholder="0" /></label>
-          <label class="field"><span>外部リンクタップ</span><input type="number" id="snsIgLink" class="input" min="0" value="${ig.linkTaps ?? ""}" placeholder="0" /></label>
-          <label class="field"><span>フォロワー増加</span><input type="number" id="snsIgFollower" class="input" min="0" value="${ig.followerGain ?? ""}" placeholder="0" /></label>
+          <label class="field"><span>プロフィールへのアクセス</span><input type="number" id="snsIgProfile" class="input" min="0" value="${ig.profileAccess ?? ""}" placeholder="0" /></label>
+          <label class="field"><span>外部リンクのタップ数</span><input type="number" id="snsIgLink" class="input" min="0" value="${ig.linkTaps ?? ""}" placeholder="0" /></label>
         </div>
       </div>
       <div class="sns-modal-section">
@@ -793,7 +786,6 @@
           <label class="field"><span>DM送信数</span><input type="number" id="snsSlDm" class="input" min="0" value="${sl.dmSent ?? ""}" placeholder="0" /></label>
           <label class="field"><span>返信数</span><input type="number" id="snsSlReply" class="input" min="0" value="${sl.replies ?? ""}" placeholder="0" /></label>
           <label class="field"><span>商談数</span><input type="number" id="snsSlMeet" class="input" min="0" value="${sl.meetings ?? ""}" placeholder="0" /></label>
-          <label class="field"><span>見積もり数</span><input type="number" id="snsSlQuote" class="input" min="0" value="${sl.quotes ?? ""}" placeholder="0" /></label>
           <label class="field"><span>受注数</span><input type="number" id="snsSlOrder" class="input" min="0" value="${sl.orders ?? ""}" placeholder="0" /></label>
         </div>
       </div>
@@ -821,16 +813,15 @@
         id: existing?.id || uid(),
         weekStart,
         instagram: {
+          views: parseNum($("#snsIgViews").value),
           reach: parseNum($("#snsIgReach").value),
           profileAccess: parseNum($("#snsIgProfile").value),
           linkTaps: parseNum($("#snsIgLink").value),
-          followerGain: parseNum($("#snsIgFollower").value),
         },
         sales: {
           dmSent: parseNum($("#snsSlDm").value),
           replies: parseNum($("#snsSlReply").value),
           meetings: parseNum($("#snsSlMeet").value),
-          quotes: parseNum($("#snsSlQuote").value),
           orders: parseNum($("#snsSlOrder").value),
         },
         notes: $("#snsNotesField").value.trim(),
