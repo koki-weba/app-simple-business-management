@@ -1,3 +1,2644 @@
+================================================================================
+ 起業ロードマップ PWA — ソースコード一式 (v11)
+================================================================================
+
+################################################################################
+# FILE: index.html
+################################################################################
+
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+  <meta name="theme-color" content="#2563eb" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="default" />
+  <meta name="apple-mobile-web-app-title" content="起業管理" />
+  <meta name="description" content="5期間の起業ロードマップ・KPI・営業・クライアントを一元管理するPWA" />
+  <link rel="manifest" href="manifest.json" />
+  <link rel="icon" type="image/svg+xml" href="icons/icon.svg" />
+  <link rel="apple-touch-icon" href="icons/icon.svg" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=DM+Sans:ital,opsz,wght@0,9..40,400;0,9..40,500;0,9..40,600;0,9..40,700;1,9..40,400&family=Noto+Sans+JP:wght@400;500;600;700&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="styles.css?v=11" />
+  <title>起業ロードマップ | Startup Roadmap</title>
+</head>
+<body>
+  <div class="update-banner" id="updateBanner" hidden role="alert">
+    <p id="updateBannerText">新しいバージョンがあります</p>
+    <button type="button" class="btn btn-primary btn-sm" id="updateAppBtn">更新する</button>
+    <button type="button" class="icon-btn update-dismiss" id="dismissUpdateBtn" aria-label="閉じる">×</button>
+  </div>
+  <div class="app-shell">
+    <header class="app-header">
+      <div class="header-inner">
+        <div class="brand">
+          <div class="brand-logo" aria-hidden="true">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M3 17l6-6 4 4 8-10"/><path d="M14 5h7v7"/>
+            </svg>
+          </div>
+          <div class="brand-text">
+            <h1 id="page-title">ホーム</h1>
+            <p id="page-subtitle">2026.05 — 2028.03 ロードマップ</p>
+          </div>
+        </div>
+        <button type="button" class="icon-btn" id="notifBtn" aria-label="今月のフォーカス">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg>
+        </button>
+      </div>
+      <div class="phase-strip" id="phaseStrip" aria-hidden="true"></div>
+    </header>
+
+    <main class="app-main" id="appMain">
+      <!-- HOME -->
+      <section class="view view-home active" data-view="home">
+        <div class="card hero-card animate-in">
+          <div class="hero-grid">
+            <div class="hero-copy">
+              <span class="eyebrow" id="heroPhaseLabel">第1期</span>
+              <h2 class="hero-metric" id="heroRevenuePct">0%</h2>
+              <p class="hero-sub" id="heroRevenueSub">最終目標 月商60万円 への進捗</p>
+              <div class="hero-chips" id="heroChips"></div>
+            </div>
+            <div class="ring-wrap">
+              <svg class="ring" viewBox="0 0 120 120" aria-hidden="true">
+                <circle class="ring-bg" cx="60" cy="60" r="52"/>
+                <circle class="ring-fg" id="heroRing" cx="60" cy="60" r="52"/>
+              </svg>
+              <span class="ring-label" id="heroRingLabel">0%</span>
+            </div>
+          </div>
+        </div>
+
+        <div class="stat-row animate-in" style="--delay: 0.05s">
+          <div class="stat-card">
+            <span class="stat-label">今月売上</span>
+            <strong class="stat-value" id="statMonthRevenue">--</strong>
+            <span class="stat-meta" id="statMonthTarget">目標 --</span>
+          </div>
+          <div class="stat-card">
+            <span class="stat-label">継続収益</span>
+            <strong class="stat-value" id="statRecurring">--</strong>
+            <span class="stat-meta" id="statRecurringCount">0社</span>
+          </div>
+          <div class="stat-card">
+            <span class="stat-label">今週DM</span>
+            <strong class="stat-value" id="statWeekDm">0</strong>
+            <span class="stat-meta" id="statWeekDmGoal">/ 50件</span>
+          </div>
+        </div>
+
+        <div class="card animate-in" style="--delay: 0.1s">
+          <div class="card-head">
+            <h3>今月のフォーカス</h3>
+            <div class="head-actions">
+              <span class="badge" id="currentMonthBadge">5月</span>
+              <button type="button" class="btn btn-ghost btn-sm" id="editFocusBtn" title="今月の計画を編集">編集</button>
+            </div>
+          </div>
+          <p class="focus-title" id="focusTitle">--</p>
+          <ul class="focus-list" id="focusActions"></ul>
+        </div>
+
+        <div class="card animate-in" style="--delay: 0.15s">
+          <div class="card-head">
+            <h3>クイック記録</h3>
+          </div>
+          <div class="quick-grid">
+            <button type="button" class="quick-btn" data-quick="dm">
+              <span class="quick-icon">📨</span>
+              <span>DM +1</span>
+            </button>
+            <button type="button" class="quick-btn" data-quick="revenue">
+              <span class="quick-icon">💴</span>
+              <span>売上入力</span>
+            </button>
+            <button type="button" class="quick-btn" data-quick="client">
+              <span class="quick-icon">🤝</span>
+              <span>案件追加</span>
+            </button>
+            <button type="button" class="quick-btn" data-quick="task">
+              <span class="quick-icon">✓</span>
+              <span>タスク完了</span>
+            </button>
+          </div>
+        </div>
+
+        <div class="card animate-in" style="--delay: 0.2s">
+          <div class="card-head">
+            <h3>マイルストーン</h3>
+            <span class="muted" id="milestoneProgress">0/0</span>
+          </div>
+          <div class="milestone-preview" id="milestonePreview"></div>
+        </div>
+      </section>
+
+      <!-- ROADMAP -->
+      <section class="view view-roadmap" data-view="roadmap">
+        <div class="card intro-card animate-in">
+          <div class="card-head">
+            <h3 id="roadmapIntroTitle">5期間ロードマップ</h3>
+            <button type="button" class="btn btn-ghost btn-sm" id="editRoadmapIntroBtn">編集</button>
+          </div>
+          <p id="roadmapIntroDesc">2026年5月から2028年3月まで、0→1・単価UP・ストック収益・外注化・月商60万を段階的に達成します。</p>
+          <div class="timeline-bar" id="timelineBar"></div>
+        </div>
+        <div id="roadmapPhases" class="roadmap-list"></div>
+      </section>
+
+      <!-- KPI -->
+      <section class="view view-kpi" data-view="kpi">
+        <div class="card animate-in">
+          <div class="card-head">
+            <h3>月次KPI</h3>
+            <button type="button" class="btn btn-primary btn-sm" id="addRecordBtn">+ 記録</button>
+          </div>
+          <div class="chart-wrap">
+            <canvas id="revenueChart" aria-label="月次売上グラフ"></canvas>
+          </div>
+          <div class="seg-group" id="chartRangeSeg">
+            <button type="button" class="seg-btn active" data-range="6">6ヶ月</button>
+            <button type="button" class="seg-btn" data-range="12">12ヶ月</button>
+            <button type="button" class="seg-btn" data-range="24">全期間</button>
+          </div>
+        </div>
+        <div class="card animate-in">
+          <div class="card-head">
+            <h3>記録一覧</h3>
+            <button type="button" class="btn btn-ghost btn-sm" id="editMonthTargetBtn">月別目標</button>
+          </div>
+          <div id="recordsList" class="records-list"></div>
+        </div>
+        <div class="card animate-in">
+          <h3>手取りシミュレーション</h3>
+          <p class="muted small">売上の約67%を手取り目安として表示（税・経費は設定で調整可）</p>
+          <div class="sim-row">
+            <label>今月売上（円）</label>
+            <input type="number" id="simRevenue" class="input" min="0" step="1000" />
+          </div>
+          <div class="sim-row">
+            <label>手取り率（%）</label>
+            <input type="range" id="simRate" min="40" max="90" value="67" />
+            <span id="simRateLabel">67%</span>
+          </div>
+          <p class="sim-result">推定手取り: <strong id="simTakeHome">--</strong></p>
+        </div>
+      </section>
+
+      <!-- SALES -->
+      <section class="view view-sales" data-view="sales">
+        <div class="card dm-card animate-in">
+          <div class="card-head">
+            <h3>DM送信トラッカー</h3>
+            <span class="badge badge-blue" id="dmTodayBadge">今日 0/10</span>
+          </div>
+          <div class="dm-counter">
+            <button type="button" class="dm-btn dm-minus" id="dmMinus" aria-label="DM減らす">−</button>
+            <div class="dm-display">
+              <span class="dm-num" id="dmTodayCount">0</span>
+              <span class="dm-label">今日の送信数</span>
+            </div>
+            <button type="button" class="dm-btn dm-plus" id="dmPlus" aria-label="DM追加">+</button>
+          </div>
+          <div class="progress-line">
+            <div class="progress-fill" id="dmWeekBar" style="width:0%"></div>
+          </div>
+          <p class="muted small" id="dmWeekText">今週 0 / 50 件</p>
+        </div>
+
+        <div class="card animate-in">
+          <div class="card-head">
+            <h3>DMテンプレート</h3>
+            <button type="button" class="btn btn-ghost btn-sm" id="addDmTemplateBtn">+ 追加</button>
+          </div>
+          <div id="dmTemplates" class="template-list"></div>
+        </div>
+
+        <div class="card animate-in">
+          <div class="card-head">
+            <h3>営業ログ</h3>
+            <button type="button" class="btn btn-ghost btn-sm" id="addSalesLogBtn">+ ログ</button>
+          </div>
+          <div id="salesLogList" class="log-list"></div>
+        </div>
+      </section>
+
+      <!-- CLIENTS -->
+      <section class="view view-clients" data-view="clients">
+        <div class="card animate-in">
+          <div class="card-head">
+            <h3>クライアント・案件</h3>
+            <button type="button" class="btn btn-primary btn-sm" id="addClientBtn">+ 追加</button>
+          </div>
+          <div class="client-summary" id="clientSummary"></div>
+        </div>
+        <div id="clientList" class="client-list"></div>
+      </section>
+
+      <!-- TASKS -->
+      <section class="view view-tasks" data-view="tasks">
+        <div class="card animate-in">
+          <div class="card-head">
+            <h3>タスク</h3>
+            <button type="button" class="btn btn-ghost btn-sm" id="addTaskBtn">+ 追加</button>
+          </div>
+          <div class="filter-chips" id="taskFilters">
+            <button type="button" class="chip active" data-filter="all">すべて</button>
+            <button type="button" class="chip" data-filter="sales">営業</button>
+            <button type="button" class="chip" data-filter="delivery">納品</button>
+            <button type="button" class="chip" data-filter="retention">継続</button>
+            <button type="button" class="chip" data-filter="product">プロダクト</button>
+          </div>
+          <div id="taskList" class="task-list"></div>
+        </div>
+        <div class="card animate-in">
+          <div class="card-head">
+            <h3>戦略メモ</h3>
+            <button type="button" class="btn btn-ghost btn-sm" id="addNoteBtn">+ メモ</button>
+          </div>
+          <div id="notesList" class="notes-list"></div>
+        </div>
+      </section>
+
+      <!-- SETTINGS -->
+      <section class="view view-settings" data-view="settings">
+        <div class="card animate-in">
+          <h3>プロフィール</h3>
+          <label class="field">
+            <span>名前</span>
+            <input type="text" id="profileName" class="input" placeholder="例：山田" />
+          </label>
+          <label class="field">
+            <span>事業名</span>
+            <input type="text" id="profileBusiness" class="input" />
+          </label>
+          <label class="field">
+            <span>モットー</span>
+            <input type="text" id="profileMotto" class="input" />
+          </label>
+        </div>
+        <div class="card animate-in">
+          <h3>目標設定</h3>
+          <label class="field">
+            <span>最終月商目標（円）</span>
+            <input type="number" id="settingUltimate" class="input" min="0" step="10000" />
+          </label>
+          <label class="field">
+            <span>手取り目標（円）</span>
+            <input type="number" id="settingTakeHome" class="input" min="0" step="10000" />
+          </label>
+          <label class="field">
+            <span>DM 1日の目標</span>
+            <input type="number" id="settingDmDaily" class="input" min="1" max="100" />
+          </label>
+          <label class="field">
+            <span>DM 1週間の目標</span>
+            <input type="number" id="settingDmWeekly" class="input" min="1" max="500" />
+          </label>
+          <button type="button" class="btn btn-primary btn-block" id="saveSettingsBtn">設定を保存</button>
+        </div>
+        <div class="card animate-in">
+          <h3>アプリの更新</h3>
+          <p class="muted small">「最新版を確認」はサーバー上のバージョンと照合します。反映されない場合は「キャッシュを消去」を押してください（データは残ります）。</p>
+          <p class="version-line">この端末: <strong id="appVersionLabel">v11</strong>　／　サーバー: <strong id="serverVersionLabel">未確認</strong></p>
+          <div class="btn-row">
+            <button type="button" class="btn btn-primary" id="checkUpdateBtn">最新版を確認</button>
+            <button type="button" class="btn btn-ghost" id="forceUpdateBtn">キャッシュを消去</button>
+          </div>
+        </div>
+        <div class="card animate-in">
+          <h3>クラウド同期（スマホ・PC）</h3>
+          <p class="muted small">同じ<strong>同期ID</strong>をスマホとPCで使うと、記録が自動で揃います。変更は約1.5秒後にクラウドへ送信され、他端末は開いたときに反映されます。</p>
+          <label class="sync-toggle">
+            <input type="checkbox" id="syncEnabled" />
+            クラウド同期を有効にする
+          </label>
+          <label class="field">
+            <span>同期ID（両方の端末で同じIDを入力）</span>
+            <div class="sync-id-row">
+              <input type="text" id="syncIdInput" class="input" placeholder="保存時に自動発行もできます" autocomplete="off" />
+              <button type="button" class="btn btn-ghost btn-sm" id="copySyncIdBtn">コピー</button>
+            </div>
+          </label>
+          <div class="btn-row">
+            <button type="button" class="btn btn-primary" id="saveSyncBtn">同期設定を保存</button>
+            <button type="button" class="btn btn-ghost" id="syncNowBtn">今すぐ同期</button>
+          </div>
+          <button type="button" class="btn btn-ghost btn-sm sync-new-id" id="newSyncIdBtn">新しい同期IDを発行</button>
+          <p class="sync-status" id="syncStatusText">—</p>
+          <details class="sync-help">
+            <summary>Firebase 初回設定（無料・1回だけ）</summary>
+            <ol>
+              <li><a href="https://console.firebase.google.com/" target="_blank" rel="noopener">Firebase Console</a>でプロジェクト作成</li>
+              <li>Firestore Database を作成</li>
+              <li>ウェブアプリを追加し、設定値を <code>firebase-config.js</code> に貼り付け</li>
+              <li><code>enabled: true</code> に変更して GitHub に push</li>
+              <li>スマホ・PCで同じ同期IDを入力</li>
+            </ol>
+          </details>
+        </div>
+        <div class="card animate-in">
+          <h3>データ管理</h3>
+          <p class="muted small">削除した項目はゴミ箱から復元できます。リセット前は自動でアーカイブが作成されます。</p>
+          <div class="btn-row">
+            <button type="button" class="btn btn-ghost" id="exportBtn">エクスポート</button>
+            <label class="btn btn-ghost">
+              インポート
+              <input type="file" id="importFile" accept="application/json" hidden />
+            </label>
+          </div>
+          <button type="button" class="btn btn-danger btn-block" id="resetDataBtn">全データをリセット</button>
+        </div>
+        <div class="card animate-in">
+          <div class="card-head">
+            <h3>ゴミ箱</h3>
+            <button type="button" class="btn btn-ghost btn-sm" id="emptyTrashBtn">空にする</button>
+          </div>
+          <p class="muted small" id="trashSummary">削除した項目はここから復元できます</p>
+          <div id="trashList" class="trash-list"></div>
+        </div>
+        <div class="card animate-in">
+          <div class="card-head">
+            <h3>アーカイブ</h3>
+          </div>
+          <p class="muted small">リセット直前のデータスナップショット。復元すると現在のデータはアーカイブに退避されます。</p>
+          <div id="archiveList" class="archive-list"></div>
+        </div>
+        <div class="card animate-in install-card" id="installCard" hidden>
+          <h3>ホーム画面に追加</h3>
+          <p>スマホで「ホーム画面に追加」するとアプリのように使えます。</p>
+          <button type="button" class="btn btn-primary btn-block" id="installBtn">インストール</button>
+        </div>
+        <p class="version-tag">起業ロードマップ v11</p>
+      </section>
+    </main>
+
+    <nav class="bottom-nav" id="bottomNav" aria-label="メインナビゲーション">
+      <button type="button" class="nav-btn active" data-nav="home" aria-current="page">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 9.5 12 3l9 6.5V20a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1V9.5z"/><path d="M9 21V12h6v9"/></svg>
+        <span>ホーム</span>
+      </button>
+      <button type="button" class="nav-btn" data-nav="roadmap">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 3v18h18"/><path d="M7 15l4-6 4 3 5-8"/></svg>
+        <span>計画</span>
+      </button>
+      <button type="button" class="nav-btn" data-nav="kpi">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 19V5M10 19V9M16 19v-6M22 19V3"/></svg>
+        <span>KPI</span>
+      </button>
+      <button type="button" class="nav-btn" data-nav="sales">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
+        <span>営業</span>
+      </button>
+      <button type="button" class="nav-btn" data-nav="clients">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75"/></svg>
+        <span>案件</span>
+      </button>
+      <button type="button" class="nav-btn" data-nav="tasks">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg>
+        <span>タスク</span>
+      </button>
+      <button type="button" class="nav-btn" data-nav="settings">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M12 1v2M12 21v2M4.22 4.22l1.42 1.42M18.36 18.36l1.42 1.42M1 12h2M21 12h2M4.22 19.78l1.42-1.42M18.36 5.64l1.42-1.42"/></svg>
+        <span>設定</span>
+      </button>
+      <span class="nav-indicator" id="navIndicator" aria-hidden="true"></span>
+    </nav>
+  </div>
+
+  <!-- Modal -->
+  <div class="modal-backdrop" id="modalBackdrop" hidden>
+    <div class="modal" role="dialog" aria-modal="true" aria-labelledby="modalTitle">
+      <div class="modal-head">
+        <h2 id="modalTitle">入力</h2>
+        <button type="button" class="icon-btn modal-close" id="modalClose" aria-label="閉じる">×</button>
+      </div>
+      <div class="modal-body" id="modalBody"></div>
+      <div class="modal-foot" id="modalFoot"></div>
+    </div>
+  </div>
+
+  <div class="toast" id="toast" role="status" aria-live="polite">
+    <span id="toastMsg"></span>
+    <button type="button" class="toast-undo" id="toastUndoBtn" hidden>元に戻す</button>
+  </div>
+
+  <script src="https://www.gstatic.com/firebasejs/10.14.0/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.14.0/firebase-firestore-compat.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+  <script src="firebase-config.js?v=11"></script>
+  <script src="sync.js?v=11"></script>
+  <script src="defaults.js?v=11"></script>
+  <script src="app.js?v=11"></script>
+</body>
+</html>
+
+################################################################################
+# FILE: styles.css
+################################################################################
+
+/* 起業ロードマップ PWA — 白×青 プロフェッショナルUI */
+:root {
+  --blue-50: #eff6ff;
+  --blue-100: #dbeafe;
+  --blue-200: #bfdbfe;
+  --blue-500: #3b82f6;
+  --blue-600: #2563eb;
+  --blue-700: #1d4ed8;
+  --blue-800: #1e40af;
+  --blue-900: #1e3a8a;
+  --slate-50: #f8fafc;
+  --slate-100: #f1f5f9;
+  --slate-200: #e2e8f0;
+  --slate-400: #94a3b8;
+  --slate-500: #64748b;
+  --slate-600: #475569;
+  --slate-700: #334155;
+  --slate-800: #1e293b;
+  --slate-900: #0f172a;
+  --white: #ffffff;
+  --danger: #dc2626;
+  --success: #16a34a;
+  --radius: 16px;
+  --radius-sm: 10px;
+  --shadow: 0 4px 24px rgba(37, 99, 235, 0.08);
+  --shadow-lg: 0 12px 40px rgba(15, 23, 42, 0.12);
+  --header-h: 64px;
+  --nav-h: 68px;
+  --safe-b: env(safe-area-inset-bottom, 0px);
+  --font: "DM Sans", "Noto Sans JP", system-ui, sans-serif;
+  --transition: 0.28s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+html {
+  -webkit-tap-highlight-color: transparent;
+  scroll-behavior: smooth;
+}
+
+body {
+  font-family: var(--font);
+  background: linear-gradient(165deg, var(--slate-50) 0%, var(--blue-50) 45%, var(--white) 100%);
+  color: var(--slate-800);
+  min-height: 100dvh;
+  overflow-x: hidden;
+  -webkit-font-smoothing: antialiased;
+}
+
+.update-banner {
+  position: fixed;
+  top: 0;
+  left: 50%;
+  transform: translateX(-50%) translateY(-110%);
+  width: 100%;
+  max-width: 480px;
+  z-index: 500;
+  background: linear-gradient(135deg, var(--blue-700), var(--blue-600));
+  color: var(--white);
+  padding: calc(10px + env(safe-area-inset-top, 0px)) 14px 10px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  box-shadow: var(--shadow-lg);
+  transition: transform 0.35s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.update-banner.show {
+  transform: translateX(-50%) translateY(0);
+}
+
+.update-banner p {
+  flex: 1;
+  font-size: 0.82rem;
+  font-weight: 600;
+  margin: 0;
+  line-height: 1.35;
+}
+
+.update-banner .btn-primary {
+  box-shadow: none;
+  flex-shrink: 0;
+}
+
+.update-dismiss {
+  background: rgba(255,255,255,0.2) !important;
+  color: var(--white) !important;
+  width: 32px;
+  height: 32px;
+  flex-shrink: 0;
+}
+
+.version-line {
+  font-size: 0.85rem;
+  color: var(--slate-600);
+  margin: 10px 0;
+}
+
+.version-line strong { color: var(--blue-700); }
+
+.version-line strong.version-new,
+#serverVersionLabel.version-new {
+  color: var(--danger);
+}
+
+.app-shell {
+  max-width: 480px;
+  margin: 0 auto;
+  min-height: 100dvh;
+  position: relative;
+}
+
+/* Header */
+.app-header {
+  position: sticky;
+  top: 0;
+  z-index: 100;
+  background: rgba(255, 255, 255, 0.88);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  border-bottom: 1px solid var(--slate-200);
+  padding-top: env(safe-area-inset-top, 0px);
+}
+
+.header-inner {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 12px 16px 8px;
+  gap: 12px;
+}
+
+.brand {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-width: 0;
+}
+
+.brand-logo {
+  width: 40px;
+  height: 40px;
+  border-radius: 12px;
+  background: linear-gradient(135deg, var(--blue-600), var(--blue-800));
+  color: var(--white);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  box-shadow: 0 4px 12px rgba(37, 99, 235, 0.35);
+}
+
+.brand-logo svg { width: 22px; height: 22px; }
+
+.brand-text h1 {
+  font-size: 1.05rem;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  color: var(--slate-900);
+  line-height: 1.2;
+}
+
+.brand-text p {
+  font-size: 0.72rem;
+  color: var(--slate-500);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.phase-strip {
+  display: flex;
+  gap: 4px;
+  padding: 0 16px 10px;
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+
+.phase-strip::-webkit-scrollbar { display: none; }
+
+.phase-dot {
+  flex: 1;
+  min-width: 48px;
+  height: 4px;
+  border-radius: 2px;
+  background: var(--slate-200);
+  transition: background var(--transition), transform var(--transition);
+}
+
+.phase-dot.active {
+  background: var(--blue-600);
+  transform: scaleY(1.4);
+}
+
+.phase-dot.done { background: var(--blue-400, #60a5fa); }
+
+.icon-btn {
+  width: 40px;
+  height: 40px;
+  border: none;
+  border-radius: 12px;
+  background: var(--slate-100);
+  color: var(--slate-600);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: background var(--transition), transform 0.15s;
+}
+
+.icon-btn svg { width: 20px; height: 20px; }
+.icon-btn:active { transform: scale(0.94); }
+
+/* Main */
+.app-main {
+  padding: 12px 16px calc(var(--nav-h) + var(--safe-b) + 20px);
+}
+
+.view {
+  display: none;
+  animation: viewIn 0.35s ease both;
+}
+
+.view.active { display: block; }
+
+@keyframes viewIn {
+  from { opacity: 0; transform: translateY(8px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+.animate-in {
+  animation: cardIn 0.5s ease both;
+  animation-delay: var(--delay, 0s);
+}
+
+@keyframes cardIn {
+  from { opacity: 0; transform: translateY(12px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+/* Cards */
+.card {
+  background: var(--white);
+  border-radius: var(--radius);
+  padding: 18px;
+  margin-bottom: 14px;
+  box-shadow: var(--shadow);
+  border: 1px solid rgba(226, 232, 240, 0.8);
+}
+
+.intro-card p {
+  font-size: 0.88rem;
+  color: var(--slate-600);
+  line-height: 1.6;
+  margin-top: 8px;
+}
+
+.card-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 12px;
+  gap: 8px;
+}
+
+.head-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.card h3 {
+  font-size: 0.95rem;
+  font-weight: 700;
+  color: var(--slate-900);
+}
+
+/* Hero */
+.hero-card {
+  background: linear-gradient(145deg, var(--blue-700) 0%, var(--blue-600) 55%, #3b82f6 100%);
+  color: var(--white);
+  border: none;
+  overflow: hidden;
+  position: relative;
+}
+
+.hero-card::after {
+  content: "";
+  position: absolute;
+  top: -40%;
+  right: -20%;
+  width: 60%;
+  height: 80%;
+  background: radial-gradient(circle, rgba(255,255,255,0.15) 0%, transparent 70%);
+  pointer-events: none;
+}
+
+.hero-grid {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+  position: relative;
+  z-index: 1;
+}
+
+.eyebrow {
+  font-size: 0.72rem;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  opacity: 0.85;
+}
+
+.hero-metric {
+  font-size: 2.4rem;
+  font-weight: 700;
+  letter-spacing: -0.03em;
+  line-height: 1.1;
+  margin: 4px 0;
+}
+
+.hero-sub {
+  font-size: 0.8rem;
+  opacity: 0.9;
+}
+
+.hero-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 10px;
+}
+
+.chip-tag {
+  font-size: 0.68rem;
+  padding: 4px 10px;
+  border-radius: 20px;
+  background: rgba(255,255,255,0.2);
+  backdrop-filter: blur(4px);
+}
+
+.ring-wrap {
+  position: relative;
+  width: 100px;
+  height: 100px;
+  flex-shrink: 0;
+}
+
+.ring { width: 100%; height: 100%; transform: rotate(-90deg); }
+
+.ring-bg {
+  fill: none;
+  stroke: rgba(255,255,255,0.2);
+  stroke-width: 8;
+}
+
+.ring-fg {
+  fill: none;
+  stroke: #fff;
+  stroke-width: 8;
+  stroke-linecap: round;
+  stroke-dasharray: 326.7;
+  stroke-dashoffset: 326.7;
+  transition: stroke-dashoffset 0.9s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.ring-label {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1.1rem;
+  font-weight: 700;
+}
+
+/* Stats */
+.stat-row {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 8px;
+  margin-bottom: 14px;
+}
+
+.stat-card {
+  background: var(--white);
+  border-radius: var(--radius-sm);
+  padding: 12px 10px;
+  text-align: center;
+  box-shadow: var(--shadow);
+  border: 1px solid var(--slate-100);
+}
+
+.stat-label {
+  display: block;
+  font-size: 0.65rem;
+  color: var(--slate-500);
+  font-weight: 500;
+}
+
+.stat-value {
+  display: block;
+  font-size: 1rem;
+  font-weight: 700;
+  color: var(--blue-700);
+  margin: 4px 0 2px;
+}
+
+.stat-meta {
+  font-size: 0.62rem;
+  color: var(--slate-400);
+}
+
+/* Focus */
+.badge {
+  font-size: 0.7rem;
+  font-weight: 600;
+  padding: 4px 10px;
+  border-radius: 20px;
+  background: var(--blue-100);
+  color: var(--blue-700);
+}
+
+.badge-blue { background: var(--blue-600); color: var(--white); }
+
+.focus-title {
+  font-size: 1rem;
+  font-weight: 600;
+  color: var(--slate-900);
+  margin-bottom: 10px;
+}
+
+.focus-list {
+  list-style: none;
+}
+
+.focus-list li {
+  font-size: 0.85rem;
+  color: var(--slate-600);
+  padding: 8px 0 8px 20px;
+  position: relative;
+  border-bottom: 1px solid var(--slate-100);
+  line-height: 1.5;
+}
+
+.focus-list li:last-child { border-bottom: none; }
+
+.focus-list li::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  top: 14px;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--blue-500);
+}
+
+/* Quick */
+.quick-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 10px;
+}
+
+.quick-btn {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  padding: 16px 12px;
+  border: 1px solid var(--slate-200);
+  border-radius: var(--radius-sm);
+  background: var(--slate-50);
+  font-size: 0.82rem;
+  font-weight: 600;
+  color: var(--slate-700);
+  cursor: pointer;
+  transition: all var(--transition);
+  position: relative;
+  overflow: hidden;
+}
+
+.quick-btn:hover { border-color: var(--blue-300); background: var(--blue-50); }
+.quick-btn:active { transform: scale(0.97); }
+
+.quick-icon { font-size: 1.4rem; }
+
+/* Milestone preview */
+.milestone-preview .ms-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 0;
+  font-size: 0.85rem;
+}
+
+.ms-check {
+  width: 22px;
+  height: 22px;
+  border-radius: 6px;
+  border: 2px solid var(--slate-300);
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all var(--transition);
+  cursor: pointer;
+}
+
+.ms-check.done {
+  background: var(--blue-600);
+  border-color: var(--blue-600);
+  color: var(--white);
+}
+
+/* Roadmap */
+.timeline-bar {
+  display: flex;
+  height: 6px;
+  border-radius: 3px;
+  overflow: hidden;
+  margin-top: 14px;
+  background: var(--slate-200);
+}
+
+.timeline-seg {
+  flex: 1;
+  transition: opacity var(--transition);
+}
+
+.timeline-seg.past { opacity: 1; }
+.timeline-seg.future { opacity: 0.35; }
+
+.phase-block {
+  margin-bottom: 12px;
+  border-radius: var(--radius);
+  overflow: hidden;
+  border: 1px solid var(--slate-200);
+  background: var(--white);
+  box-shadow: var(--shadow);
+}
+
+.phase-header {
+  padding: 16px;
+  cursor: pointer;
+  display: flex;
+  gap: 12px;
+  align-items: flex-start;
+  transition: background var(--transition);
+}
+
+.phase-header:active { background: var(--slate-50); }
+
+.phase-num {
+  width: 36px;
+  height: 36px;
+  border-radius: 10px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 700;
+  font-size: 0.9rem;
+  color: var(--white);
+  flex-shrink: 0;
+}
+
+.phase-meta { flex: 1; min-width: 0; }
+
+.phase-meta h4 {
+  font-size: 0.95rem;
+  font-weight: 700;
+  color: var(--slate-900);
+}
+
+.phase-meta p {
+  font-size: 0.75rem;
+  color: var(--slate-500);
+  margin-top: 2px;
+}
+
+.phase-revenue {
+  font-size: 0.72rem;
+  font-weight: 600;
+  color: var(--blue-600);
+  margin-top: 4px;
+}
+
+.phase-chevron {
+  width: 20px;
+  height: 20px;
+  color: var(--slate-400);
+  transition: transform var(--transition);
+  flex-shrink: 0;
+  margin-top: 8px;
+}
+
+.phase-block.open .phase-chevron { transform: rotate(180deg); }
+
+.phase-body {
+  max-height: 0;
+  overflow: hidden;
+  transition: max-height 0.4s ease;
+}
+
+.phase-block.open .phase-body { max-height: 4000px; }
+
+.month-block {
+  border-top: 1px solid var(--slate-100);
+  padding: 14px 16px;
+}
+
+.month-block h5 {
+  font-size: 0.88rem;
+  font-weight: 700;
+  color: var(--slate-800);
+  margin-bottom: 8px;
+}
+
+.month-block h5 span {
+  color: var(--blue-600);
+  margin-right: 6px;
+}
+
+.action-list, .outcome-list {
+  list-style: none;
+  margin: 8px 0;
+}
+
+.action-list.check-list li,
+.focus-list.check-list li {
+  padding: 6px 0;
+  padding-left: 0;
+}
+
+.action-list.check-list li::before,
+.focus-list.check-list li::before {
+  display: none;
+}
+
+.month-task-row {
+  display: flex;
+  align-items: flex-start;
+  gap: 6px;
+  cursor: pointer;
+  width: 100%;
+  min-height: 1.5em;
+}
+
+.month-task-check {
+  appearance: none;
+  -webkit-appearance: none;
+  width: 12px;
+  height: 12px;
+  margin-top: 3px;
+  border: 1.5px solid var(--slate-400);
+  border-radius: 2px;
+  background: var(--white);
+  flex-shrink: 0;
+  cursor: pointer;
+  position: relative;
+  padding: 0;
+}
+
+.month-task-check:checked {
+  background: var(--blue-600);
+  border-color: var(--blue-600);
+}
+
+.month-task-check:checked::after {
+  content: "✓";
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--white);
+  font-size: 0.55rem;
+  font-weight: 700;
+  line-height: 1;
+}
+
+.month-task-text {
+  flex: 1;
+  line-height: 1.5;
+  font-size: 0.8rem;
+}
+
+.month-task-text.done {
+  text-decoration: line-through;
+  color: var(--slate-400);
+}
+
+.action-list li, .outcome-list li {
+  font-size: 0.8rem;
+  color: var(--slate-600);
+  padding: 6px 0 6px 16px;
+  position: relative;
+  line-height: 1.5;
+}
+
+.action-list li::before {
+  content: "→";
+  position: absolute;
+  left: 0;
+  color: var(--blue-500);
+  font-size: 0.75rem;
+}
+
+.outcome-list li::before {
+  content: "✓";
+  position: absolute;
+  left: 0;
+  color: var(--success);
+  font-size: 0.75rem;
+}
+
+.ms-roadmap {
+  margin-top: 10px;
+  padding-top: 10px;
+  border-top: 1px dashed var(--slate-200);
+}
+
+.ms-roadmap label {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 0.8rem;
+  padding: 4px 0;
+  cursor: pointer;
+}
+
+/* KPI */
+.chart-wrap {
+  height: 220px;
+  margin: 8px 0 12px;
+  position: relative;
+}
+
+.seg-group {
+  display: flex;
+  gap: 6px;
+  background: var(--slate-100);
+  padding: 4px;
+  border-radius: 10px;
+}
+
+.seg-btn {
+  flex: 1;
+  border: none;
+  background: transparent;
+  padding: 8px;
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: var(--slate-500);
+  border-radius: 8px;
+  cursor: pointer;
+  transition: all var(--transition);
+}
+
+.seg-btn.active {
+  background: var(--white);
+  color: var(--blue-700);
+  box-shadow: 0 2px 8px rgba(0,0,0,0.06);
+}
+
+.records-list .record-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 12px 0;
+  border-bottom: 1px solid var(--slate-100);
+  gap: 8px;
+}
+
+.record-item-main {
+  flex: 1;
+  min-width: 0;
+  cursor: pointer;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 8px;
+}
+
+.record-item-actions {
+  display: flex;
+  gap: 4px;
+  flex-shrink: 0;
+}
+
+.record-item:last-child { border-bottom: none; }
+
+.record-month { font-weight: 600; font-size: 0.9rem; }
+.record-val { color: var(--blue-700); font-weight: 700; }
+
+.sim-row {
+  margin: 12px 0;
+}
+
+.sim-row label {
+  display: block;
+  font-size: 0.8rem;
+  color: var(--slate-600);
+  margin-bottom: 6px;
+}
+
+.sim-result {
+  font-size: 1.1rem;
+  margin-top: 12px;
+  color: var(--slate-800);
+}
+
+.sim-result strong { color: var(--blue-700); }
+
+/* DM */
+.dm-counter {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 24px;
+  padding: 16px 0;
+}
+
+.dm-btn {
+  width: 52px;
+  height: 52px;
+  border-radius: 50%;
+  border: 2px solid var(--blue-200);
+  background: var(--white);
+  font-size: 1.5rem;
+  color: var(--blue-700);
+  cursor: pointer;
+  transition: all var(--transition);
+}
+
+.dm-btn:active { transform: scale(0.92); background: var(--blue-50); }
+
+.dm-display { text-align: center; }
+
+.dm-num {
+  display: block;
+  font-size: 2.8rem;
+  font-weight: 700;
+  color: var(--blue-700);
+  line-height: 1;
+}
+
+.dm-label { font-size: 0.75rem; color: var(--slate-500); }
+
+.progress-line {
+  height: 8px;
+  background: var(--slate-200);
+  border-radius: 4px;
+  overflow: hidden;
+  margin-top: 8px;
+}
+
+.progress-fill {
+  height: 100%;
+  background: linear-gradient(90deg, var(--blue-500), var(--blue-700));
+  border-radius: 4px;
+  transition: width 0.5s ease;
+}
+
+.template-list .tpl-item {
+  padding: 12px;
+  background: var(--slate-50);
+  border-radius: var(--radius-sm);
+  margin-bottom: 8px;
+  border: 1px solid var(--slate-200);
+}
+
+.tpl-item h4 { font-size: 0.85rem; margin-bottom: 6px; }
+
+.tpl-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 8px;
+  margin-bottom: 6px;
+}
+
+.tpl-actions {
+  display: flex;
+  gap: 4px;
+  flex-shrink: 0;
+}
+
+.ms-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 0;
+  font-size: 0.85rem;
+}
+
+.ms-item-text {
+  flex: 1;
+  min-width: 0;
+}
+
+.ms-roadmap label {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 0.8rem;
+  padding: 4px 0;
+}
+
+.ms-roadmap .ms-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 0;
+}
+
+.month-block-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+
+.icon-action {
+  width: 32px;
+  height: 32px;
+  border: none;
+  border-radius: 8px;
+  background: var(--slate-100);
+  color: var(--slate-500);
+  font-size: 0.85rem;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  transition: background var(--transition), color var(--transition);
+}
+
+.icon-action:hover { background: var(--blue-50); color: var(--blue-600); }
+.icon-action.danger:hover { background: #fef2f2; color: var(--danger); }
+
+.item-actions {
+  display: flex;
+  gap: 4px;
+  flex-shrink: 0;
+}
+
+.trash-list .trash-item,
+.archive-list .archive-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 12px;
+  background: var(--slate-50);
+  border-radius: var(--radius-sm);
+  margin-bottom: 8px;
+  border: 1px solid var(--slate-200);
+}
+
+.trash-item-meta,
+.archive-item-meta {
+  flex: 1;
+  min-width: 0;
+}
+
+.trash-item-label {
+  font-size: 0.88rem;
+  font-weight: 600;
+  color: var(--slate-800);
+}
+
+.trash-item-type,
+.archive-item-date {
+  font-size: 0.72rem;
+  color: var(--slate-500);
+  margin-top: 2px;
+}
+
+.trash-item-actions,
+.archive-item-actions {
+  display: flex;
+  gap: 6px;
+  flex-shrink: 0;
+}
+
+.danger-text { color: var(--danger) !important; }
+
+.tpl-item ol {
+  margin-left: 18px;
+  font-size: 0.78rem;
+  color: var(--slate-600);
+  line-height: 1.6;
+}
+
+.log-list .log-item {
+  padding: 12px 0;
+  border-bottom: 1px solid var(--slate-100);
+  display: flex;
+  gap: 8px;
+  align-items: flex-start;
+}
+
+.log-item-body {
+  flex: 1;
+  min-width: 0;
+  cursor: pointer;
+}
+
+.log-item .log-date { font-size: 0.72rem; color: var(--slate-400); }
+.log-item .log-body { font-size: 0.85rem; margin-top: 4px; }
+
+/* Clients */
+.client-summary {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 10px;
+  margin-bottom: 12px;
+}
+
+.summary-box {
+  background: var(--blue-50);
+  border-radius: var(--radius-sm);
+  padding: 12px;
+  text-align: center;
+}
+
+.summary-box strong {
+  display: block;
+  font-size: 1.2rem;
+  color: var(--blue-700);
+}
+
+.summary-box span { font-size: 0.7rem; color: var(--slate-500); }
+
+.client-item {
+  background: var(--white);
+  border-radius: var(--radius);
+  padding: 16px;
+  margin-bottom: 10px;
+  box-shadow: var(--shadow);
+  border: 1px solid var(--slate-100);
+  cursor: pointer;
+  transition: transform 0.15s;
+}
+
+.client-item:active { transform: scale(0.99); }
+
+.client-item h4 { font-size: 0.95rem; font-weight: 700; }
+
+.client-memo {
+  font-size: 0.8rem;
+  color: var(--slate-500);
+  line-height: 1.5;
+  margin: 4px 0 8px;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+.client-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 8px;
+}
+
+.tag {
+  font-size: 0.65rem;
+  padding: 3px 8px;
+  border-radius: 6px;
+  background: var(--slate-100);
+  color: var(--slate-600);
+  font-weight: 600;
+}
+
+.tag.active { background: var(--blue-100); color: var(--blue-700); }
+.tag.recurring { background: #dcfce7; color: #166534; }
+
+.testimonial-card {
+  background: var(--blue-50);
+  border-left: 3px solid var(--blue-600);
+  padding: 12px;
+  border-radius: 0 var(--radius-sm) var(--radius-sm) 0;
+  margin-bottom: 8px;
+  font-size: 0.85rem;
+  line-height: 1.6;
+}
+
+.testimonial-card cite {
+  display: block;
+  margin-top: 8px;
+  font-size: 0.75rem;
+  color: var(--slate-500);
+  font-style: normal;
+}
+
+/* Tasks */
+.filter-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-bottom: 12px;
+}
+
+.chip {
+  border: 1px solid var(--slate-200);
+  background: var(--white);
+  padding: 6px 12px;
+  border-radius: 20px;
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: var(--slate-600);
+  cursor: pointer;
+  transition: all var(--transition);
+}
+
+.chip.active {
+  background: var(--blue-600);
+  border-color: var(--blue-600);
+  color: var(--white);
+}
+
+.task-item {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 0;
+  border-bottom: 1px solid var(--slate-100);
+}
+
+.task-main {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-width: 0;
+}
+
+.task-check {
+  width: 24px;
+  height: 24px;
+  border-radius: 8px;
+  border: 2px solid var(--slate-300);
+  cursor: pointer;
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all var(--transition);
+}
+
+.task-check.done {
+  background: var(--blue-600);
+  border-color: var(--blue-600);
+  color: var(--white);
+}
+
+.task-text { flex: 1; font-size: 0.88rem; }
+.task-text.done { text-decoration: line-through; color: var(--slate-400); }
+
+.notes-list .note-item {
+  padding: 12px;
+  background: var(--slate-50);
+  border-radius: var(--radius-sm);
+  margin-bottom: 8px;
+  font-size: 0.85rem;
+  line-height: 1.5;
+  display: flex;
+  gap: 8px;
+  align-items: flex-start;
+}
+
+.note-main {
+  flex: 1;
+  min-width: 0;
+  cursor: pointer;
+}
+
+.note-date { font-size: 0.7rem; color: var(--slate-400); margin-bottom: 4px; }
+
+/* Forms */
+.field {
+  display: block;
+  margin-bottom: 14px;
+}
+
+.field span {
+  display: block;
+  font-size: 0.78rem;
+  font-weight: 600;
+  color: var(--slate-600);
+  margin-bottom: 6px;
+}
+
+.input, select.input, textarea.input {
+  width: 100%;
+  padding: 12px 14px;
+  border: 1px solid var(--slate-200);
+  border-radius: var(--radius-sm);
+  font-family: inherit;
+  font-size: 0.9rem;
+  background: var(--white);
+  color: var(--slate-800);
+  transition: border-color var(--transition), box-shadow var(--transition);
+}
+
+.input:focus {
+  outline: none;
+  border-color: var(--blue-500);
+  box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.15);
+}
+
+textarea.input { min-height: 80px; resize: vertical; }
+
+.btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  padding: 12px 18px;
+  border-radius: var(--radius-sm);
+  font-family: inherit;
+  font-size: 0.88rem;
+  font-weight: 600;
+  border: none;
+  cursor: pointer;
+  transition: all var(--transition);
+  position: relative;
+  overflow: hidden;
+}
+
+.btn-primary {
+  background: linear-gradient(135deg, var(--blue-600), var(--blue-700));
+  color: var(--white);
+  box-shadow: 0 4px 14px rgba(37, 99, 235, 0.35);
+}
+
+.btn-primary:active { transform: scale(0.98); }
+
+.btn-ghost {
+  background: var(--slate-100);
+  color: var(--slate-700);
+}
+
+.btn-danger {
+  background: #fef2f2;
+  color: var(--danger);
+  border: 1px solid #fecaca;
+}
+
+.btn-sm { padding: 8px 14px; font-size: 0.78rem; }
+.btn-block { width: 100%; }
+
+.btn-row {
+  display: flex;
+  gap: 10px;
+  margin: 12px 0;
+}
+
+.btn-row .btn { flex: 1; }
+
+.muted { color: var(--slate-500); font-size: 0.82rem; }
+.small { font-size: 0.75rem; }
+
+.version-tag {
+  text-align: center;
+  font-size: 0.7rem;
+  color: var(--slate-400);
+  padding: 20px 0 8px;
+}
+
+/* Bottom nav */
+.bottom-nav {
+  position: fixed;
+  bottom: 0;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 100%;
+  max-width: 480px;
+  height: calc(var(--nav-h) + var(--safe-b));
+  padding-bottom: var(--safe-b);
+  background: rgba(255, 255, 255, 0.95);
+  backdrop-filter: blur(20px);
+  border-top: 1px solid var(--slate-200);
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-around;
+  z-index: 200;
+  padding-top: 6px;
+}
+
+.nav-btn {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  border: none;
+  background: none;
+  color: var(--slate-400);
+  font-size: 0.58rem;
+  font-weight: 600;
+  padding: 4px 2px;
+  cursor: pointer;
+  transition: color var(--transition);
+  position: relative;
+  z-index: 1;
+}
+
+.nav-btn svg { width: 22px; height: 22px; }
+
+.nav-btn.active { color: var(--blue-600); }
+
+.nav-indicator {
+  position: absolute;
+  bottom: calc(6px + var(--safe-b));
+  height: 3px;
+  width: 40px;
+  background: var(--blue-600);
+  border-radius: 2px;
+  transition: left 0.3s cubic-bezier(0.4, 0, 0.2, 1), width 0.3s;
+  pointer-events: none;
+}
+
+/* Modal */
+.modal-backdrop {
+  position: fixed;
+  inset: 0;
+  background: rgba(15, 23, 42, 0.45);
+  z-index: 300;
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+  padding: 0;
+  animation: fadeIn 0.25s ease;
+}
+
+.modal-backdrop[hidden] { display: none !important; }
+
+@keyframes fadeIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+.modal {
+  width: 100%;
+  max-width: 480px;
+  max-height: 88dvh;
+  background: var(--white);
+  border-radius: 20px 20px 0 0;
+  overflow: hidden;
+  animation: slideUp 0.35s cubic-bezier(0.4, 0, 0.2, 1);
+  display: flex;
+  flex-direction: column;
+}
+
+@keyframes slideUp {
+  from { transform: translateY(100%); }
+  to { transform: translateY(0); }
+}
+
+.modal-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 18px 18px 10px;
+  border-bottom: 1px solid var(--slate-100);
+}
+
+.modal-head h2 { font-size: 1.05rem; }
+
+.modal-body {
+  padding: 16px 18px;
+  overflow-y: auto;
+  flex: 1;
+}
+
+.modal-foot {
+  padding: 12px 18px calc(18px + var(--safe-b));
+  border-top: 1px solid var(--slate-100);
+  display: flex;
+  gap: 10px;
+}
+
+.modal-foot .btn { flex: 1; }
+
+.modal-close { font-size: 1.4rem; line-height: 1; }
+
+/* Toast */
+.toast {
+  position: fixed;
+  bottom: calc(var(--nav-h) + var(--safe-b) + 16px);
+  left: 50%;
+  transform: translateX(-50%) translateY(80px);
+  background: var(--slate-900);
+  color: var(--white);
+  padding: 12px 16px;
+  border-radius: 12px;
+  font-size: 0.85rem;
+  font-weight: 500;
+  z-index: 400;
+  opacity: 0;
+  transition: all 0.35s ease;
+  pointer-events: none;
+  max-width: 92%;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.toast.show {
+  opacity: 1;
+  transform: translateX(-50%) translateY(0);
+  pointer-events: auto;
+}
+
+.toast-undo {
+  border: 1px solid rgba(255,255,255,0.35);
+  background: rgba(255,255,255,0.12);
+  color: var(--white);
+  padding: 6px 12px;
+  border-radius: 8px;
+  font-size: 0.78rem;
+  font-weight: 700;
+  cursor: pointer;
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
+.toast-undo:hover { background: rgba(255,255,255,0.2); }
+
+#toastMsg { flex: 1; }
+
+/* Ripple */
+.ripple {
+  position: absolute;
+  border-radius: 50%;
+  background: rgba(37, 99, 235, 0.25);
+  transform: scale(0);
+  animation: ripple 0.55s ease-out forwards;
+  pointer-events: none;
+}
+
+@keyframes ripple {
+  to { transform: scale(1); opacity: 0; }
+}
+
+.empty-state {
+  text-align: center;
+  padding: 24px 16px;
+  color: var(--slate-400);
+  font-size: 0.85rem;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    transition-duration: 0.01ms !important;
+  }
+}
+
+@media (min-width: 481px) {
+  body { background: var(--slate-100); }
+}
+
+/* PC レイアウト */
+@media (min-width: 900px) {
+  :root {
+    --sidebar-w: 220px;
+    --nav-h: 0px;
+  }
+
+  .update-banner {
+    max-width: 1200px;
+  }
+
+  body {
+    background: linear-gradient(160deg, var(--slate-100) 0%, var(--blue-50) 40%, var(--white) 100%);
+  }
+
+  .app-shell {
+    max-width: 1200px;
+    margin: 0 auto;
+    min-height: 100dvh;
+    display: grid;
+    grid-template-columns: var(--sidebar-w) 1fr;
+    grid-template-rows: auto 1fr;
+    grid-template-areas:
+      "header header"
+      "nav main";
+    box-shadow: var(--shadow-lg);
+    background: var(--slate-50);
+  }
+
+  .app-header {
+    grid-area: header;
+    position: sticky;
+    top: 0;
+  }
+
+  .bottom-nav {
+    grid-area: nav;
+    position: sticky;
+    top: 72px;
+    left: auto;
+    transform: none;
+    width: var(--sidebar-w);
+    max-width: none;
+    height: calc(100dvh - 72px);
+    flex-direction: column;
+    justify-content: flex-start;
+    align-items: stretch;
+    padding: 16px 10px;
+    gap: 4px;
+    border-top: none;
+    border-right: 1px solid var(--slate-200);
+  }
+
+  .nav-btn {
+    flex: none;
+    flex-direction: row;
+    justify-content: flex-start;
+    gap: 12px;
+    padding: 12px 14px;
+    border-radius: var(--radius-sm);
+    font-size: 0.88rem;
+  }
+
+  .nav-btn:hover {
+    background: var(--slate-100);
+  }
+
+  .nav-btn.active {
+    background: var(--blue-50);
+  }
+
+  .nav-btn svg {
+    width: 20px;
+    height: 20px;
+  }
+
+  .nav-indicator {
+    display: none;
+  }
+
+  .app-main {
+    grid-area: main;
+    padding: 20px 28px 32px;
+    max-width: none;
+  }
+
+  .stat-row {
+    grid-template-columns: repeat(3, 1fr);
+    gap: 14px;
+  }
+
+  .hero-grid {
+    gap: 24px;
+  }
+
+  .quick-grid {
+    grid-template-columns: repeat(4, 1fr);
+  }
+
+  .client-summary {
+    grid-template-columns: repeat(4, 1fr);
+  }
+
+  .toast {
+    bottom: 24px;
+    max-width: 480px;
+  }
+
+  .modal {
+    border-radius: var(--radius);
+    margin-bottom: 5vh;
+  }
+
+  .modal-backdrop {
+    align-items: center;
+  }
+}
+
+.sync-toggle {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 0.9rem;
+  font-weight: 600;
+  margin-bottom: 14px;
+  cursor: pointer;
+}
+
+.sync-id-row {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+
+.sync-id-row .input {
+  flex: 1;
+}
+
+.sync-new-id {
+  margin: 8px 0 12px;
+}
+
+.sync-status {
+  font-size: 0.78rem;
+  color: var(--slate-500);
+  margin-top: 10px;
+  line-height: 1.5;
+  padding: 10px;
+  background: var(--slate-50);
+  border-radius: var(--radius-sm);
+}
+
+.sync-status.sync-ok { color: var(--success); background: #f0fdf4; }
+.sync-status.sync-error { color: var(--danger); background: #fef2f2; }
+.sync-status.sync-warn { color: #b45309; background: #fffbeb; }
+
+.sync-help {
+  margin-top: 12px;
+  font-size: 0.8rem;
+  color: var(--slate-600);
+}
+
+.sync-help summary {
+  cursor: pointer;
+  font-weight: 600;
+  color: var(--blue-700);
+}
+
+.sync-help ol {
+  margin: 10px 0 0 18px;
+  line-height: 1.7;
+}
+
+.sync-help code {
+  font-size: 0.75rem;
+  background: var(--slate-100);
+  padding: 2px 6px;
+  border-radius: 4px;
+}
+
+################################################################################
+# FILE: defaults.js
+################################################################################
+
+/* 起業ロードマップ PWA — デフォルト定義（アプリ更新時もユーザー記録は別キーで保持） */
+(() => {
+  "use strict";
+
+  const SCHEMA_VERSION = 4;
+  const STORAGE_KEY = "startupRoadmap_userData_v3";
+  const META_KEY = "startupRoadmap_meta_v3";
+
+  const ULTIMATE = {
+    monthlyRevenue: 600000,
+    takeHome: 400000,
+    deadline: "2028-03",
+    label: "月商60万・手取り40万の安定化",
+  };
+
+  const PHASES = [
+    {
+      id: "p1",
+      number: 1,
+      title: "0→1突破と実績づくり",
+      period: "2026年5月〜7月",
+      start: "2026-05",
+      end: "2026-07",
+      revenueMin: 30000,
+      revenueMax: 90000,
+      revenueLabel: "月商3万〜9万円",
+      theme: "モニター実績3件・初受注",
+      color: "#2563eb",
+      months: [
+        {
+          key: "2026-05",
+          label: "5月",
+          title: "最初の1件の獲得",
+          actions: [
+            "2ステップDM（感想＋質問）を1日10件、週50件送信",
+            "見込み客リストの整備とフォローアップ",
+            "Cursorでデモサイト制作・納品フローの確立",
+          ],
+          outcomes: [
+            "3万円のデモサイト制作を1件受注",
+            "月末までにCursorで納品完了",
+          ],
+          kpis: { dmDaily: 10, dmWeekly: 50, newProjects: 1, projectFee: 30000 },
+        },
+        {
+          key: "2026-06",
+          label: "6月",
+          title: "実績の横展開とお客様の声",
+          actions: [
+            "納品サイトをGitHub Pagesで実績公開",
+            "「〇〇院長にも喜ばれました！」を武器にDM営業継続",
+            "Before/After・お客様の声を素材化",
+          ],
+          outcomes: ["新規3万円制作を1〜2件受注"],
+          kpis: { dmDaily: 10, dmWeekly: 50, newProjects: 2, projectFee: 30000 },
+        },
+        {
+          key: "2026-07",
+          label: "7月",
+          title: "モニター期間の終了（決断の月）",
+          actions: [
+            "3件の実績が揃ったらモニター価格3万円を終了",
+            "次フェーズに向けた単価・提案の準備",
+            "ポートフォリオの最終整備",
+          ],
+          outcomes: ["モニター3件達成", "価格改定の意思決定完了"],
+          kpis: { monitorCases: 3, newProjects: 0, projectFee: 30000 },
+        },
+      ],
+      milestones: [
+        { id: "p1-m1", text: "初受注（3万円）獲得" },
+        { id: "p1-m2", text: "GitHub Pagesで実績公開" },
+        { id: "p1-m3", text: "モニター実績3件達成" },
+        { id: "p1-m4", text: "制作費3万円モニター終了" },
+      ],
+    },
+    {
+      id: "p2",
+      number: 2,
+      title: "単価UP・継続契約の初受注",
+      period: "2026年8月〜11月",
+      start: "2026-08",
+      end: "2026-11",
+      revenueMin: 150000,
+      revenueMax: 250000,
+      revenueLabel: "月商15万〜25万円",
+      theme: "労働集約からの脱却",
+      color: "#1d4ed8",
+      months: [
+        {
+          key: "2026-08",
+          label: "8月",
+          title: "提案のアップグレード（夏休み）",
+          actions: [
+            "制作単価を10万〜15万円に引き上げ",
+            "「綺麗なサイト」→「集客できるサイト」へトーク変更",
+            "15万円プランの提案資料を整備",
+          ],
+          outcomes: ["15万円サイトを1件受注（月商15万）"],
+          kpis: { newProjects: 1, projectFee: 150000, recurringClients: 0 },
+        },
+        {
+          key: "2026-09",
+          label: "9月",
+          title: "ストック収益の提案開始",
+          actions: [
+            "過去3万円クライアントへ月額3万円のMEO・Instagram運用を提案",
+            "継続契約の契約書・レポート雛形を用意",
+          ],
+          outcomes: ["初の継続契約（月額3万）1件獲得（月商18万）"],
+          kpis: { recurringFee: 30000, recurringClients: 1 },
+        },
+        {
+          key: "2026-10",
+          label: "10月",
+          title: "新規＋継続の両輪",
+          actions: [
+            "月1件の新規制作（15万円）",
+            "継続契約クライアントを2〜3社へ増枠",
+          ],
+          outcomes: ["制作15万＋継続の積み上げ"],
+          kpis: { newProjects: 1, projectFee: 150000, recurringClients: 2 },
+        },
+        {
+          key: "2026-11",
+          label: "11月",
+          title: "収益構造の安定化",
+          actions: [
+            "継続契約の解約防止・成果レポート",
+            "紹介案件の仕組みづくり",
+          ],
+          outcomes: ["制作15万＋継続9万＝月商24万円"],
+          kpis: { monthlyTarget: 240000, recurringClients: 3 },
+        },
+      ],
+      milestones: [
+        { id: "p2-m1", text: "15万円案件を初受注" },
+        { id: "p2-m2", text: "初の継続契約（月額3万）獲得" },
+        { id: "p2-m3", text: "月商24万円達成" },
+      ],
+    },
+    {
+      id: "p3",
+      number: 3,
+      title: "ストック収益の土台固め",
+      period: "2026年12月〜2027年4月",
+      start: "2026-12",
+      end: "2027-04",
+      revenueMin: 300000,
+      revenueMax: 400000,
+      revenueLabel: "月商30万〜40万円",
+      theme: "限界突破と仕組み化の準備",
+      color: "#1e40af",
+      months: [
+        {
+          key: "2026-12",
+          label: "12月",
+          title: "既存クライアント深耕",
+          actions: [
+            "新規営業より既存の売上アップ（MEO・キャンペーン画像）",
+            "解約防止と信頼強化",
+          ],
+          outcomes: ["継続契約の拡大開始"],
+          kpis: { recurringClients: 4, recurringRevenue: 120000 },
+        },
+        {
+          key: "2027-01",
+          label: "1月",
+          title: "ストック収益の積み上げ",
+          actions: ["継続クライアントへの追加提案", "紹介案件の受け皿整備"],
+          outcomes: ["毎月確定売上の増加"],
+          kpis: { recurringClients: 5, recurringRevenue: 150000 },
+        },
+        {
+          key: "2027-02",
+          label: "2月",
+          title: "家賃・生活費を越える継続収入",
+          actions: ["継続契約5〜7社を目指す運用", "成果の可視化レポート"],
+          outcomes: ["毎月1日に20万円の売上が確定する状態"],
+          kpis: { recurringClients: 6, recurringRevenue: 200000 },
+        },
+        {
+          key: "2027-03",
+          label: "3月",
+          title: "外注先選定開始（大学4年）",
+          actions: [
+            "後輩・X等でコーディング・画像のパートナー1名探索",
+            "外注マニュアル・チェックリスト作成",
+          ],
+          outcomes: ["パートナー候補リスト完成"],
+          kpis: { partners: 1 },
+        },
+        {
+          key: "2027-04",
+          label: "4月",
+          title: "仕組み化の準備完了",
+          actions: ["外注テスト案件の実施", "月商40万の壁を分析"],
+          outcomes: ["外注1名と協業開始"],
+          kpis: { monthlyTarget: 350000 },
+        },
+      ],
+      milestones: [
+        { id: "p3-m1", text: "継続契約5社以上" },
+        { id: "p3-m2", text: "毎月確定20万円のストック収益" },
+        { id: "p3-m3", text: "外注パートナー1名確保" },
+      ],
+    },
+    {
+      id: "p4",
+      number: 4,
+      title: "ディレクション（管理）への移行",
+      period: "2027年5月〜9月",
+      start: "2027-05",
+      end: "2027-09",
+      revenueMin: 400000,
+      revenueMax: 500000,
+      revenueLabel: "月商40万〜50万円",
+      theme: "自分の時間を作り出す",
+      color: "#1e3a8a",
+      months: [
+        {
+          key: "2027-05",
+          label: "5月",
+          title: "チーム制作体制の構築",
+          actions: [
+            "営業・MTG・ディレクションに特化",
+            "実務50%をパートナーへ外注（月5〜10万報酬）",
+            "制作単価20万円へ引き上げ",
+          ],
+          outcomes: ["外注フロー確立"],
+          kpis: { projectFee: 200000, outsourceRatio: 0.5 },
+        },
+        {
+          key: "2027-06",
+          label: "6月",
+          title: "ディレクション品質の向上",
+          actions: ["クライアントMTGのテンプレ化", "外注品質チェック"],
+          outcomes: ["継続8社・制作20万の体制"],
+          kpis: { recurringClients: 8, recurringRevenue: 250000 },
+        },
+        {
+          key: "2027-07",
+          label: "7月",
+          title: "月商45万円ライン",
+          actions: ["制作＋継続のバランス最適化"],
+          outcomes: ["制作20万＋継続25万＝月商45万"],
+          kpis: { monthlyTarget: 450000 },
+        },
+        {
+          key: "2027-08",
+          label: "8月",
+          title: "Exit 200M 開発再開",
+          actions: [
+            "空いた時間で自社アプリ開発を本格化",
+            "非公開リポジトリでM&A向けプロトタイプ",
+          ],
+          outcomes: ["週10時間以上をプロダクト開発に確保"],
+          kpis: { productHoursWeekly: 10 },
+        },
+        {
+          key: "2027-09",
+          label: "9月",
+          title: "事業とプロダクトの二刀流",
+          actions: ["受託の安定運用＋アプリのマイルストーン設定"],
+          outcomes: ["開発ロードマップ策定"],
+          kpis: { monthlyTarget: 450000 },
+        },
+      ],
+      milestones: [
+        { id: "p4-m1", text: "外注50%体制の確立" },
+        { id: "p4-m2", text: "月商45万円達成" },
+        { id: "p4-m3", text: "Exit 200M 開発本格化" },
+      ],
+    },
+    {
+      id: "p5",
+      number: 5,
+      title: "目標達成と自動化",
+      period: "2027年10月〜2028年3月",
+      start: "2027-10",
+      end: "2028-03",
+      revenueMin: 600000,
+      revenueMax: 600000,
+      revenueLabel: "月商60万円（手取り40万）",
+      theme: "安定化・法人化・M&A準備",
+      color: "#172554",
+      months: [
+        {
+          key: "2027-10",
+          label: "10月",
+          title: "ストック収益の極大化",
+          actions: [
+            "月額3〜5万のサポート契約を10〜12社へ",
+            "チャーン時の即時補充営業の仕組み化",
+          ],
+          outcomes: ["継続収益の最大化"],
+          kpis: { recurringClients: 10, recurringRevenue: 350000 },
+        },
+        {
+          key: "2027-11",
+          label: "11月",
+          title: "営業の仕組み完成",
+          actions: ["解約→新規埋めのプレイブック運用"],
+          outcomes: ["安定した月商ライン"],
+          kpis: { monthlyTarget: 550000 },
+        },
+        {
+          key: "2027-12",
+          label: "12月",
+          title: "月商60万達成",
+          actions: ["継続40万＋新規制作20万の設計"],
+          outcomes: ["継続40万＋制作20万＝月商60万（手取り約40万）"],
+          kpis: { monthlyTarget: 600000, takeHome: 400000 },
+        },
+        {
+          key: "2028-01",
+          label: "1月",
+          title: "法人化の検討開始（卒業前）",
+          actions: [
+            "個人事業主→株式会社設立の調査",
+            "税理士・開業届の整理",
+          ],
+          outcomes: ["法人化タイムライン確定"],
+          kpis: {},
+        },
+        {
+          key: "2028-02",
+          label: "2月",
+          title: "自社アプリプロトタイプ",
+          actions: ["Exit 200M プロトタイプ完成に向けた開発"],
+          outcomes: ["M&Aスタートラインのプロダクト版"],
+          kpis: { productMilestone: "prototype" },
+        },
+        {
+          key: "2028-03",
+          label: "3月",
+          title: "卒業・起業の節目",
+          actions: [
+            "大学卒業と同時の法人成り検討",
+            "2億円M&Aに向けたスタートライン",
+          ],
+          outcomes: ["手取り40万の安定化・法人準備完了"],
+          kpis: { monthlyTarget: 600000, takeHome: 400000 },
+        },
+      ],
+      milestones: [
+        { id: "p5-m1", text: "継続契約10社以上" },
+        { id: "p5-m2", text: "月商60万・手取り40万達成" },
+        { id: "p5-m3", text: "営業・補充の仕組み完成" },
+        { id: "p5-m4", text: "法人化・M&A準備完了" },
+      ],
+    },
+  ];
+
+  const DM_TEMPLATES = [
+    {
+      id: "dm-2step",
+      name: "2ステップDM（感想＋質問）",
+      steps: [
+        "【1通目】プロフィール・投稿への具体的な感想（2〜3行）",
+        "【2通目】相手の課題に寄せた質問（集客・サイト・MEOなど）",
+      ],
+    },
+    {
+      id: "dm-follow",
+      name: "フォローアップ",
+      steps: [
+        "前回のご返信ありがとうございます＋価値提供（事例URL）",
+        "15分だけお話しできませんか？の軽いCTA",
+      ],
+    },
+    {
+      id: "dm-upsell",
+      name: "継続提案（既存客）",
+      steps: [
+        "サイト公開後の成果・お客様の声の共有",
+        "月額3万円でMEO・Instagram運用のご提案",
+      ],
+    },
+  ];
+
+  const QUICK_TASKS = [
+    { id: "qt-dm", text: "DM 10件送信", category: "sales", phaseId: "p1" },
+    { id: "qt-portfolio", text: "実績ページを更新", category: "delivery", phaseId: "p1" },
+    { id: "qt-report", text: "継続クライアントへ月次レポート", category: "retention", phaseId: "p2" },
+    { id: "qt-proposal", text: "15万円プラン提案書を送付", category: "sales", phaseId: "p2" },
+    { id: "qt-product", text: "Exit 200M 開発 2時間", category: "product", phaseId: "p4" },
+  ];
+
+  function getCurrentPhaseKey(date = new Date()) {
+    const ym = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}`;
+    for (const p of PHASES) {
+      if (ym >= p.start && ym <= p.end) return p.id;
+    }
+    if (ym < PHASES[0].start) return PHASES[0].id;
+    return PHASES[PHASES.length - 1].id;
+  }
+
+  function getMonthPlan(monthKey) {
+    for (const p of PHASES) {
+      const m = p.months.find((x) => x.key === monthKey);
+      if (m) return { phase: p, month: m };
+    }
+    return null;
+  }
+
+  function createDefaultUserData() {
+    const milestoneState = {};
+    PHASES.forEach((p) => {
+      p.milestones.forEach((m) => {
+        milestoneState[m.id] = { done: false, doneAt: null };
+      });
+    });
+
+    return {
+      schemaVersion: SCHEMA_VERSION,
+      profile: {
+        name: "",
+        businessName: "Web制作・MEO",
+        motto: "0→1、そしてストック収益へ",
+      },
+      settings: {
+        ultimateMonthly: ULTIMATE.monthlyRevenue,
+        ultimateTakeHome: ULTIMATE.takeHome,
+        dmDailyGoal: 10,
+        dmWeeklyGoal: 50,
+        defaultTakeHomeRate: 67,
+      },
+      milestones: milestoneState,
+      monthlyRecords: [],
+      clients: [],
+      salesLogs: [],
+      tasks: QUICK_TASKS.map((t) => ({
+        id: t.id,
+        text: t.text,
+        category: t.category,
+        phaseId: t.phaseId,
+        done: false,
+        doneAt: null,
+        createdAt: new Date().toISOString(),
+      })),
+      customTasks: [],
+      notes: [],
+      journal: [],
+      trash: [],
+      archives: [],
+      monthOverrides: {},
+      monthTargetOverrides: {},
+      phaseOverrides: {},
+      roadmapIntro: null,
+      milestoneOverrides: {},
+      customMilestones: [],
+      customDmTemplates: [],
+      hiddenDmTemplateIds: [],
+      deletedDefaultTaskIds: [],
+      monthTaskChecks: {},
+      sync: {
+        enabled: false,
+        syncId: "",
+        lastSyncAt: null,
+        lastSyncStatus: "idle",
+        lastSyncMessage: "",
+      },
+      _meta: { deviceId: "", updatedAt: null },
+    };
+  }
+
+  function migrateUserData(saved) {
+    const base = createDefaultUserData();
+    if (!saved || typeof saved !== "object") return base;
+
+    const out = { ...base, ...saved, schemaVersion: SCHEMA_VERSION };
+
+    out.trash = Array.isArray(saved.trash) ? saved.trash : [];
+    out.archives = Array.isArray(saved.archives) ? saved.archives : [];
+    out.monthOverrides = saved.monthOverrides && typeof saved.monthOverrides === "object" ? saved.monthOverrides : {};
+    out.phaseOverrides = saved.phaseOverrides && typeof saved.phaseOverrides === "object" ? saved.phaseOverrides : {};
+    out.roadmapIntro =
+      saved.roadmapIntro && typeof saved.roadmapIntro === "object" ? saved.roadmapIntro : null;
+    out.monthTargetOverrides =
+      saved.monthTargetOverrides && typeof saved.monthTargetOverrides === "object" ? saved.monthTargetOverrides : {};
+    out.milestoneOverrides =
+      saved.milestoneOverrides && typeof saved.milestoneOverrides === "object" ? saved.milestoneOverrides : {};
+    out.customMilestones = Array.isArray(saved.customMilestones) ? saved.customMilestones : [];
+    out.customDmTemplates = Array.isArray(saved.customDmTemplates) ? saved.customDmTemplates : [];
+    out.hiddenDmTemplateIds = Array.isArray(saved.hiddenDmTemplateIds) ? saved.hiddenDmTemplateIds : [];
+    out.deletedDefaultTaskIds = Array.isArray(saved.deletedDefaultTaskIds) ? saved.deletedDefaultTaskIds : [];
+    out.monthTaskChecks =
+      saved.monthTaskChecks && typeof saved.monthTaskChecks === "object" ? saved.monthTaskChecks : {};
+
+    out.sync = { ...base.sync, ...(saved.sync || {}) };
+    out._meta = { ...base._meta, ...(saved._meta || {}) };
+
+    out.profile = { ...base.profile, ...(saved.profile || {}) };
+    out.settings = { ...base.settings, ...(saved.settings || {}) };
+    if (out.settings.defaultTakeHomeRate == null) out.settings.defaultTakeHomeRate = 67;
+
+    const mergedMilestones = { ...base.milestones };
+    if (saved.milestones) {
+      Object.keys(saved.milestones).forEach((id) => {
+        if (mergedMilestones[id]) {
+          mergedMilestones[id] = { ...mergedMilestones[id], ...saved.milestones[id] };
+        } else {
+          mergedMilestones[id] = saved.milestones[id];
+        }
+      });
+    }
+    out.milestones = mergedMilestones;
+
+    out.monthlyRecords = Array.isArray(saved.monthlyRecords) ? saved.monthlyRecords : [];
+    out.clients = Array.isArray(saved.clients) ? saved.clients : [];
+    out.salesLogs = Array.isArray(saved.salesLogs) ? saved.salesLogs : [];
+    out.customTasks = Array.isArray(saved.customTasks) ? saved.customTasks : [];
+    out.notes = Array.isArray(saved.notes) ? saved.notes : [];
+    out.journal = Array.isArray(saved.journal) ? saved.journal : [];
+
+    if (Array.isArray(saved.tasks) && saved.tasks.length) {
+      const byId = new Map(saved.tasks.map((t) => [t.id, t]));
+      out.tasks = base.tasks.map((t) => ({ ...t, ...(byId.get(t.id) || {}) }));
+      saved.tasks.forEach((t) => {
+        if (!out.tasks.find((x) => x.id === t.id)) out.tasks.push(t);
+      });
+    }
+
+    return out;
+  }
+
+  window.StartupDefaults = {
+    SCHEMA_VERSION,
+    STORAGE_KEY,
+    META_KEY,
+    ULTIMATE,
+    PHASES,
+    DM_TEMPLATES,
+    QUICK_TASKS,
+    getCurrentPhaseKey,
+    getMonthPlan,
+    createDefaultUserData,
+    migrateUserData,
+  };
+})();
+
+################################################################################
+# FILE: app.js
+################################################################################
+
 /* 起業ロードマップ PWA v3 — メインロジック */
 (() => {
   "use strict";
@@ -11,7 +2652,7 @@
     home: { title: "ホーム", sub: "今日のフォーカスと進捗" },
     roadmap: { title: "ロードマップ", sub: "5期間・全マイルストーン" },
     kpi: { title: "KPI", sub: "月次売上と手取り" },
-    sales: { title: "SNS", sub: "Instagram・営業の週次推移" },
+    sales: { title: "営業", sub: "DM・テンプレート・ログ" },
     clients: { title: "案件", sub: "クライアントと実績" },
     tasks: { title: "タスク", sub: "行動と戦略メモ" },
     settings: { title: "設定", sub: "目標・データ管理" },
@@ -20,8 +2661,6 @@
   let data = null;
   let chartRange = 6;
   let revenueChart = null;
-  let snsInstagramChart = null;
-  let snsSalesChart = null;
   let taskFilter = "all";
   let deferredInstall = null;
   let undoCallback = null;
@@ -36,7 +2675,6 @@
     defaultTask: "タスク",
     note: "メモ",
     salesLog: "営業ログ",
-    snsLog: "週次SNS記録",
     monthlyRecord: "月次記録",
     customMilestone: "マイルストーン",
     customDmTemplate: "DMテンプレート",
@@ -438,10 +3076,6 @@
       case "salesLog":
         if (!data.salesLogs.some((l) => l.id === item.id)) data.salesLogs.unshift(item);
         break;
-      case "snsLog":
-        if (!data.snsLogs) data.snsLogs = [];
-        if (!data.snsLogs.some((l) => l.id === item.id)) data.snsLogs.unshift(item);
-        break;
       case "monthlyRecord": {
         const i = data.monthlyRecords.findIndex((r) => r.month === item.month);
         if (i >= 0) data.monthlyRecords[i] = item;
@@ -542,311 +3176,6 @@
         else onDelete(id, row);
       });
     });
-  }
-
-  /* ── SNS helpers ── */
-  function getSundayOf(dateStr) {
-    const d = dateStr ? new Date(dateStr + "T00:00:00") : new Date();
-    d.setDate(d.getDate() - d.getDay());
-    return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
-  }
-
-  function getWeekLabel(sundayStr) {
-    if (!sundayStr) return "不明";
-    const d = new Date(sundayStr + "T00:00:00");
-    const e = new Date(d);
-    e.setDate(d.getDate() + 6);
-    return `${d.getMonth() + 1}/${d.getDate()}〜${e.getMonth() + 1}/${e.getDate()}`;
-  }
-
-  function isTodaySunday() {
-    return new Date().getDay() === 0;
-  }
-
-  function renderSnsHint() {
-    const el = $("#snsWeekHint");
-    if (!el) return;
-    if (isTodaySunday()) {
-      el.textContent = "📅 今日は日曜日です。今週の記録を入力しましょう！";
-      el.classList.add("sns-hint--today");
-    } else {
-      const daysUntilSun = (7 - new Date().getDay()) % 7 || 7;
-      el.textContent = `毎週日曜日に記録します（次の日曜まであと ${daysUntilSun} 日）`;
-      el.classList.remove("sns-hint--today");
-    }
-  }
-
-  function renderSnsCharts() {
-    if (typeof Chart === "undefined") return;
-    const logs = [...(data.snsLogs || [])].sort((a, b) =>
-      (a.weekStart || "").localeCompare(b.weekStart || "")
-    );
-    const slice = logs.slice(-8);
-    const labels = slice.map((l) => getWeekLabel(l.weekStart).split("〜")[0]);
-
-    /* Instagram チャート */
-    const igCtx = $("#snsInstagramChart");
-    if (igCtx) {
-      if (snsInstagramChart) snsInstagramChart.destroy();
-      snsInstagramChart = new Chart(igCtx, {
-        type: "line",
-        data: {
-          labels,
-          datasets: [
-            {
-              label: "リーチ",
-              data: slice.map((l) => l.instagram?.reach ?? 0),
-              borderColor: "#e1306c",
-              backgroundColor: "rgba(225,48,108,0.08)",
-              fill: true,
-              tension: 0.35,
-              yAxisID: "yL",
-            },
-            {
-              label: "プロフィール閲覧",
-              data: slice.map((l) => l.instagram?.profileAccess ?? 0),
-              borderColor: "#833ab4",
-              tension: 0.35,
-              yAxisID: "yL",
-            },
-            {
-              label: "外部リンクタップ",
-              data: slice.map((l) => l.instagram?.linkTaps ?? 0),
-              borderColor: "#fd1d1d",
-              borderDash: [4, 3],
-              tension: 0.35,
-              yAxisID: "yR",
-            },
-            {
-              label: "フォロワー増加",
-              data: slice.map((l) => l.instagram?.followerGain ?? 0),
-              borderColor: "#405de6",
-              borderDash: [4, 3],
-              tension: 0.35,
-              yAxisID: "yR",
-            },
-          ],
-        },
-        options: {
-          responsive: true,
-          maintainAspectRatio: false,
-          interaction: { mode: "index", intersect: false },
-          plugins: {
-            legend: {
-              position: "bottom",
-              labels: { boxWidth: 10, font: { size: 10 } },
-            },
-          },
-          scales: {
-            yL: {
-              type: "linear",
-              position: "left",
-              beginAtZero: true,
-              ticks: { font: { size: 9 }, maxTicksLimit: 5 },
-            },
-            yR: {
-              type: "linear",
-              position: "right",
-              beginAtZero: true,
-              grid: { drawOnChartArea: false },
-              ticks: { font: { size: 9 }, maxTicksLimit: 5 },
-            },
-          },
-        },
-      });
-    }
-
-    /* 営業ファネル チャート */
-    const slCtx = $("#snsSalesChart");
-    if (slCtx) {
-      if (snsSalesChart) snsSalesChart.destroy();
-      snsSalesChart = new Chart(slCtx, {
-        type: "bar",
-        data: {
-          labels,
-          datasets: [
-            {
-              label: "DM送信",
-              data: slice.map((l) => l.sales?.dmSent ?? 0),
-              backgroundColor: "rgba(37,99,235,0.72)",
-              borderRadius: 3,
-            },
-            {
-              label: "返信",
-              data: slice.map((l) => l.sales?.replies ?? 0),
-              backgroundColor: "rgba(16,185,129,0.72)",
-              borderRadius: 3,
-            },
-            {
-              label: "商談",
-              data: slice.map((l) => l.sales?.meetings ?? 0),
-              backgroundColor: "rgba(245,158,11,0.82)",
-              borderRadius: 3,
-            },
-            {
-              label: "見積",
-              data: slice.map((l) => l.sales?.quotes ?? 0),
-              backgroundColor: "rgba(139,92,246,0.72)",
-              borderRadius: 3,
-            },
-            {
-              label: "受注",
-              data: slice.map((l) => l.sales?.orders ?? 0),
-              backgroundColor: "rgba(239,68,68,0.82)",
-              borderRadius: 3,
-            },
-          ],
-        },
-        options: {
-          responsive: true,
-          maintainAspectRatio: false,
-          interaction: { mode: "index", intersect: false },
-          plugins: {
-            legend: {
-              position: "bottom",
-              labels: { boxWidth: 10, font: { size: 10 } },
-            },
-          },
-          scales: {
-            y: {
-              beginAtZero: true,
-              ticks: { font: { size: 9 }, maxTicksLimit: 5 },
-            },
-          },
-        },
-      });
-    }
-  }
-
-  function renderSnsList() {
-    const list = $("#snsLogList");
-    if (!list) return;
-    const sorted = [...(data.snsLogs || [])].sort((a, b) =>
-      (b.weekStart || "").localeCompare(a.weekStart || "")
-    );
-    if (!sorted.length) {
-      list.innerHTML =
-        '<p class="empty-state">まだ記録がありません。毎週日曜日に入力しましょう。</p>';
-      return;
-    }
-    list.innerHTML = sorted
-      .slice(0, 12)
-      .map((l) => {
-        const ig = l.instagram || {};
-        const sl = l.sales || {};
-        return `
-        <div class="log-item" data-id="${l.id}">
-          <div class="log-item-body">
-            <div class="log-date">${getWeekLabel(l.weekStart)}</div>
-            <div class="log-body sns-summary-row">
-              <span class="sns-chip sns-chip--ig">📱 リーチ ${(ig.reach ?? 0).toLocaleString()} ／ ↑${ig.followerGain ?? 0}</span>
-              <span class="sns-chip sns-chip--sl">💼 DM${sl.dmSent ?? 0} → 受注${sl.orders ?? 0}</span>
-            </div>
-          </div>
-          ${actionButtons()}
-        </div>`;
-      })
-      .join("");
-
-    list.querySelectorAll(".log-item-body").forEach((el) => {
-      el.addEventListener("click", () =>
-        openSnsLogModal(el.closest(".log-item").dataset.id)
-      );
-    });
-    bindItemActions(
-      list,
-      (id) => openSnsLogModal(id),
-      (id) => {
-        const log = (data.snsLogs || []).find((x) => x.id === id);
-        if (!log) return;
-        softDelete("snsLog", log, `${getWeekLabel(log.weekStart)}の記録`, () => {
-          data.snsLogs = data.snsLogs.filter((x) => x.id !== id);
-        });
-      }
-    );
-  }
-
-  function openSnsLogModal(logId) {
-    if (!data.snsLogs) data.snsLogs = [];
-    const existing = logId ? data.snsLogs.find((x) => x.id === logId) : null;
-    const defaultWeek = getSundayOf();
-    const weekVal = existing?.weekStart || defaultWeek;
-    const ig = existing?.instagram || {};
-    const sl = existing?.sales || {};
-
-    openModal(
-      existing ? "週次記録を編集" : "週次SNS・営業記録",
-      `<p class="muted small" style="margin-bottom:0.75rem">週の開始（日曜日）を選択して記録します</p>
-      <label class="field"><span>週（日曜日の日付）</span><input type="date" id="snsWeekDate" class="input" value="${weekVal}" /></label>
-      <div class="sns-modal-section">
-        <p class="sns-modal-label">📱 Instagram</p>
-        <div class="sns-form-grid">
-          <label class="field"><span>リーチ</span><input type="number" id="snsIgReach" class="input" min="0" value="${ig.reach ?? ""}" placeholder="0" /></label>
-          <label class="field"><span>プロフィール閲覧</span><input type="number" id="snsIgProfile" class="input" min="0" value="${ig.profileAccess ?? ""}" placeholder="0" /></label>
-          <label class="field"><span>外部リンクタップ</span><input type="number" id="snsIgLink" class="input" min="0" value="${ig.linkTaps ?? ""}" placeholder="0" /></label>
-          <label class="field"><span>フォロワー増加</span><input type="number" id="snsIgFollower" class="input" min="0" value="${ig.followerGain ?? ""}" placeholder="0" /></label>
-        </div>
-      </div>
-      <div class="sns-modal-section">
-        <p class="sns-modal-label">💼 営業</p>
-        <div class="sns-form-grid">
-          <label class="field"><span>DM送信数</span><input type="number" id="snsSlDm" class="input" min="0" value="${sl.dmSent ?? ""}" placeholder="0" /></label>
-          <label class="field"><span>返信数</span><input type="number" id="snsSlReply" class="input" min="0" value="${sl.replies ?? ""}" placeholder="0" /></label>
-          <label class="field"><span>商談数</span><input type="number" id="snsSlMeet" class="input" min="0" value="${sl.meetings ?? ""}" placeholder="0" /></label>
-          <label class="field"><span>見積もり数</span><input type="number" id="snsSlQuote" class="input" min="0" value="${sl.quotes ?? ""}" placeholder="0" /></label>
-          <label class="field"><span>受注数</span><input type="number" id="snsSlOrder" class="input" min="0" value="${sl.orders ?? ""}" placeholder="0" /></label>
-        </div>
-      </div>
-      <label class="field"><span>メモ</span><textarea id="snsNotesField" class="input" rows="2">${escapeHtml(existing?.notes ?? "")}</textarea></label>`,
-      `<button type="button" class="btn btn-danger btn-sm" id="modalDelete" ${existing ? "" : "hidden"}>削除</button>
-       <button type="button" class="btn btn-ghost" id="modalCancel">キャンセル</button>
-       <button type="button" class="btn btn-primary" id="modalSave">保存</button>`
-    );
-
-    $("#modalCancel").onclick = closeModal;
-    if (existing) {
-      $("#modalDelete").onclick = () => {
-        closeModal();
-        softDelete("snsLog", existing, `${getWeekLabel(existing.weekStart)}の記録`, () => {
-          data.snsLogs = data.snsLogs.filter((x) => x.id !== logId);
-        });
-      };
-    }
-
-    $("#modalSave").onclick = () => {
-      const weekStart = $("#snsWeekDate").value;
-      if (!weekStart) return toast("週を選択してください");
-
-      const payload = {
-        id: existing?.id || uid(),
-        weekStart,
-        instagram: {
-          reach: parseNum($("#snsIgReach").value),
-          profileAccess: parseNum($("#snsIgProfile").value),
-          linkTaps: parseNum($("#snsIgLink").value),
-          followerGain: parseNum($("#snsIgFollower").value),
-        },
-        sales: {
-          dmSent: parseNum($("#snsSlDm").value),
-          replies: parseNum($("#snsSlReply").value),
-          meetings: parseNum($("#snsSlMeet").value),
-          quotes: parseNum($("#snsSlQuote").value),
-          orders: parseNum($("#snsSlOrder").value),
-        },
-        notes: $("#snsNotesField").value.trim(),
-        updatedAt: new Date().toISOString(),
-      };
-
-      const idx = data.snsLogs.findIndex(
-        (x) => x.weekStart === weekStart || x.id === payload.id
-      );
-      if (idx >= 0) data.snsLogs[idx] = { ...data.snsLogs[idx], ...payload };
-      else data.snsLogs.push(payload);
-
-      closeModal();
-      saveData();
-      toast(existing ? "週次記録を更新しました" : "週次記録を保存しました");
-    };
   }
 
   /* ── DM helpers ── */
@@ -1024,7 +3353,6 @@
     $("#page-subtitle").textContent = meta.sub;
     updateNavIndicator(view);
     if (view === "kpi") renderChart();
-    if (view === "sales") renderSnsCharts();
     if (view === "settings") compareWithServerVersion(false);
     window.scrollTo({ top: 0, behavior: prefersReducedMotion() ? "auto" : "smooth" });
   }
@@ -1765,9 +4093,6 @@
         });
       }
     );
-
-    renderSnsHint();
-    renderSnsList();
   }
 
   function openDmTemplateModal(id, isCustom) {
@@ -2562,7 +4887,6 @@
     $("#editRoadmapIntroBtn")?.addEventListener("click", openRoadmapIntroModal);
     $("#addSalesLogBtn").addEventListener("click", () => openSalesLogModal());
     $("#addDmTemplateBtn")?.addEventListener("click", () => openDmTemplateModal(null, true));
-    $("#addSnsLogBtn")?.addEventListener("click", () => openSnsLogModal(null));
     $("#addClientBtn").addEventListener("click", () => openClientModal());
     $("#addTaskBtn").addEventListener("click", () => openTaskModal());
     $("#addNoteBtn").addEventListener("click", () => openNoteModal());
@@ -2656,3 +4980,157 @@
     document.addEventListener("DOMContentLoaded", () => init());
   } else init();
 })();
+
+################################################################################
+# FILE: sync.js
+################################################################################
+
+/* クラウド同期（Firebase Firestore）— スマホ・PC間でデータ共有 */
+window.CloudSync = (() => {
+  "use strict";
+
+  const DEVICE_KEY = "startupRoadmap_deviceId";
+  let db = null;
+  let unsubscribe = null;
+  let pushTimer = null;
+  let mergeHandler = null;
+  let applyingRemote = false;
+
+  function isConfigured() {
+    const c = window.FirebaseConfig;
+    return !!(c && c.enabled && c.projectId && c.apiKey && typeof firebase !== "undefined");
+  }
+
+  function getDeviceId() {
+    let id = localStorage.getItem(DEVICE_KEY);
+    if (!id) {
+      id = `d_${Math.random().toString(36).slice(2, 14)}`;
+      localStorage.setItem(DEVICE_KEY, id);
+    }
+    return id;
+  }
+
+  function generateSyncId() {
+    const chars = "abcdefghijklmnopqrstuvwxyz0123456789";
+    let s = "";
+    for (let i = 0; i < 16; i++) s += chars[Math.floor(Math.random() * chars.length)];
+    return s;
+  }
+
+  function setMergeHandler(fn) {
+    mergeHandler = fn;
+  }
+
+  async function init() {
+    if (!isConfigured()) return false;
+    try {
+      if (!firebase.apps.length) {
+        firebase.initializeApp(window.FirebaseConfig);
+      }
+      db = firebase.firestore();
+      return true;
+    } catch (e) {
+      console.error("CloudSync init failed", e);
+      return false;
+    }
+  }
+
+  function docRef(syncId) {
+    return db.collection("roadmaps").doc(syncId);
+  }
+
+  async function pull(syncId) {
+    if (!db || !syncId) return null;
+    const snap = await docRef(syncId).get();
+    if (!snap.exists) return null;
+    return snap.data();
+  }
+
+  async function push(syncId, payload) {
+    if (!db || !syncId) return;
+    await docRef(syncId).set({
+      payload,
+      updatedAtMs: Date.now(),
+      deviceId: getDeviceId(),
+      appVersion: payload.schemaVersion || 0,
+    });
+  }
+
+  function schedulePush(syncId, getPayload) {
+    if (!db || !syncId || applyingRemote) return;
+    clearTimeout(pushTimer);
+    pushTimer = setTimeout(async () => {
+      try {
+        await push(syncId, getPayload());
+      } catch (e) {
+        console.error("CloudSync push failed", e);
+        if (mergeHandler) mergeHandler({ type: "error", message: e.message });
+      }
+    }, 1500);
+  }
+
+  function startWatch(syncId) {
+    if (!db || !syncId) return;
+    stopWatch();
+    unsubscribe = docRef(syncId).onSnapshot(
+      (snap) => {
+        if (!snap.exists || applyingRemote) return;
+        const remote = snap.data();
+        if (remote.deviceId === getDeviceId()) return;
+        if (mergeHandler) mergeHandler({ type: "remote", data: remote });
+      },
+      (err) => console.error("CloudSync watch error", err)
+    );
+  }
+
+  function stopWatch() {
+    if (unsubscribe) {
+      unsubscribe();
+      unsubscribe = null;
+    }
+  }
+
+  function setApplyingRemote(v) {
+    applyingRemote = v;
+  }
+
+  return {
+    isConfigured,
+    getDeviceId,
+    generateSyncId,
+    init,
+    pull,
+    push,
+    schedulePush,
+    startWatch,
+    stopWatch,
+    setApplyingRemote,
+    setMergeHandler,
+  };
+})();
+
+################################################################################
+# FILE: firebase-config.js
+################################################################################
+
+/* Firebase 設定 — クラウド同期を使う場合のみ編集してください
+ *
+ * 1. https://console.firebase.google.com/ でプロジェクト作成
+ * 2. Firestore Database を「テストモード」で作成
+ * 3. プロジェクト設定 → ウェブアプリ追加 → 設定値を下記に貼り付け
+ * 4. enabled を true に変更
+ *
+ * Firestore ルール例（本番前に要調整）:
+ *   match /roadmaps/{syncId} {
+ *     allow read, write: if syncId.matches('^[a-zA-Z0-9_-]{8,64}$');
+ *   }
+ */
+window.FirebaseConfig = {
+  enabled: false,
+  apiKey: "",
+  authDomain: "",
+  projectId: "",
+  storageBucket: "",
+  messagingSenderId: "",
+  appId: "",
+};

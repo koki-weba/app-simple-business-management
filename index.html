@@ -216,6 +216,40 @@
           </div>
           <div id="salesLogList" class="log-list"></div>
         </div>
+
+        <!-- SNS/営業 週次記録 -->
+        <div class="card animate-in">
+          <div class="card-head">
+            <h3>📊 週次SNS・営業記録</h3>
+            <button type="button" class="btn btn-primary btn-sm" id="addSnsLogBtn">+ 記録</button>
+          </div>
+          <p class="muted small sns-hint" id="snsWeekHint">毎週日曜日にその週の数値をまとめて入力します。</p>
+
+          <div class="sns-section">
+            <h4 class="sns-section-title">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="14" height="14"><rect x="2" y="2" width="20" height="20" rx="5"/><path d="M16 11.37A4 4 0 1 1 12.63 8 4 4 0 0 1 16 11.37z"/><line x1="17.5" y1="6.5" x2="17.51" y2="6.5"/></svg>
+              Instagram
+            </h4>
+            <div class="chart-wrap chart-wrap-sns">
+              <canvas id="snsInstagramChart" aria-label="Instagram推移グラフ"></canvas>
+            </div>
+          </div>
+
+          <div class="sns-section">
+            <h4 class="sns-section-title">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="14" height="14"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
+              営業ファネル
+            </h4>
+            <div class="chart-wrap chart-wrap-sns">
+              <canvas id="snsSalesChart" aria-label="営業ファネルグラフ"></canvas>
+            </div>
+          </div>
+
+          <div class="card-head" style="margin-top:1.25rem;padding-top:.75rem;border-top:1px solid var(--border)">
+            <span class="muted small">記録一覧（直近12週）</span>
+          </div>
+          <div id="snsLogList" class="log-list"></div>
+        </div>
       </section>
 
       <!-- CLIENTS -->
@@ -382,8 +416,8 @@
         <span>KPI</span>
       </button>
       <button type="button" class="nav-btn" data-nav="sales">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
-        <span>営業</span>
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="3" width="20" height="14" rx="2"/><path d="M8 21h8M12 17v4"/></svg>
+        <span>SNS</span>
       </button>
       <button type="button" class="nav-btn" data-nav="clients">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75"/></svg>

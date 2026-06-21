@@ -1646,3 +1646,80 @@ textarea.input { min-height: 80px; resize: vertical; }
   padding: 2px 6px;
   border-radius: 4px;
 }
+
+/* ── SNS 週次記録 ── */
+.chart-wrap-sns {
+  position: relative;
+  height: 180px;
+  margin: 8px 0 4px;
+}
+
+.sns-section {
+  margin-top: 1.25rem;
+}
+
+.sns-section-title {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 0.82rem;
+  font-weight: 700;
+  color: var(--slate-600);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  margin-bottom: 0;
+}
+
+.sns-hint {
+  transition: color 0.2s;
+}
+
+.sns-hint--today {
+  color: #059669;
+  font-weight: 600;
+}
+
+.sns-modal-section {
+  margin-top: 1rem;
+  padding-top: 0.75rem;
+  border-top: 1px solid var(--border);
+}
+
+.sns-modal-label {
+  font-size: 0.85rem;
+  font-weight: 700;
+  margin-bottom: 0.5rem;
+  color: var(--slate-700);
+}
+
+.sns-form-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0.5rem 0.75rem;
+}
+
+.sns-summary-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 3px;
+}
+
+.sns-chip {
+  display: inline-flex;
+  align-items: center;
+  padding: 2px 8px;
+  border-radius: 999px;
+  font-size: 0.72rem;
+  font-weight: 600;
+}
+
+.sns-chip--ig {
+  background: linear-gradient(135deg, rgba(225,48,108,0.1), rgba(64,93,230,0.1));
+  color: #c026d3;
+}
+
+.sns-chip--sl {
+  background: rgba(37,99,235,0.08);
+  color: var(--blue-700);
+}
