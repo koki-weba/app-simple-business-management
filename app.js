@@ -4,7 +4,7 @@
 
   const D = window.StartupDefaults;
   const STORAGE_KEY = D.STORAGE_KEY;
-  const APP_VERSION = 14;
+  const APP_VERSION = 15;
   const CIRC = 326.7;
 
   const PAGE_META = {
@@ -585,7 +585,7 @@
       borderColor: color,
       backgroundColor: opts.fill ? rgba(color, 0.12) : "transparent",
       fill: !!opts.fill,
-      tension: 0.32,
+      tension: 0,
       borderWidth: 2.75,
       borderDash: opts.dash || [],
       pointRadius: 4.5,
