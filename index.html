@@ -14,7 +14,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=DM+Sans:ital,opsz,wght@0,9..40,400;0,9..40,500;0,9..40,600;0,9..40,700;1,9..40,400&family=Noto+Sans+JP:wght@400;500;600;700&display=swap" rel="stylesheet" />
-  <link rel="stylesheet" href="styles.css?v=11" />
+  <link rel="stylesheet" href="styles.css?v=12" />
   <title>起業ロードマップ | Startup Roadmap</title>
 </head>
 <body>
@@ -201,22 +201,6 @@
           <p class="muted small" id="dmWeekText">今週 0 / 50 件</p>
         </div>
 
-        <div class="card animate-in">
-          <div class="card-head">
-            <h3>DMテンプレート</h3>
-            <button type="button" class="btn btn-ghost btn-sm" id="addDmTemplateBtn">+ 追加</button>
-          </div>
-          <div id="dmTemplates" class="template-list"></div>
-        </div>
-
-        <div class="card animate-in">
-          <div class="card-head">
-            <h3>営業ログ</h3>
-            <button type="button" class="btn btn-ghost btn-sm" id="addSalesLogBtn">+ ログ</button>
-          </div>
-          <div id="salesLogList" class="log-list"></div>
-        </div>
-
         <!-- SNS/営業 週次記録 -->
         <div class="card animate-in">
           <div class="card-head">
@@ -230,8 +214,14 @@
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="14" height="14"><rect x="2" y="2" width="20" height="20" rx="5"/><path d="M16 11.37A4 4 0 1 1 12.63 8 4 4 0 0 1 16 11.37z"/><line x1="17.5" y1="6.5" x2="17.51" y2="6.5"/></svg>
               Instagram
             </h4>
+            <p class="sns-chart-caption">閲覧・リーチ</p>
             <div class="chart-wrap chart-wrap-sns">
-              <canvas id="snsInstagramChart" aria-label="Instagram推移グラフ"></canvas>
+              <canvas id="snsInstagramChart" aria-label="Instagram閲覧・リーチ推移"></canvas>
+              <p class="sns-chart-empty" id="snsIgEmpty" hidden>まだ記録がありません</p>
+            </div>
+            <p class="sns-chart-caption">プロフィール・リンク</p>
+            <div class="chart-wrap chart-wrap-sns">
+              <canvas id="snsInstagramActionChart" aria-label="Instagramアクション推移"></canvas>
             </div>
           </div>
 
@@ -240,15 +230,11 @@
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="14" height="14"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
               営業ファネル
             </h4>
-            <div class="chart-wrap chart-wrap-sns">
-              <canvas id="snsSalesChart" aria-label="営業ファネルグラフ"></canvas>
+            <div class="chart-wrap chart-wrap-sns chart-wrap-sns-tall">
+              <canvas id="snsSalesChart" aria-label="営業ファネル推移グラフ"></canvas>
+              <p class="sns-chart-empty" id="snsSalesEmpty" hidden>まだ記録がありません</p>
             </div>
           </div>
-
-          <div class="card-head" style="margin-top:1.25rem;padding-top:.75rem;border-top:1px solid var(--border)">
-            <span class="muted small">記録一覧（直近12週）</span>
-          </div>
-          <div id="snsLogList" class="log-list"></div>
         </div>
       </section>
 
@@ -329,7 +315,7 @@
         <div class="card animate-in">
           <h3>アプリの更新</h3>
           <p class="muted small">「最新版を確認」はサーバー上のバージョンと照合します。反映されない場合は「キャッシュを消去」を押してください（データは残ります）。</p>
-          <p class="version-line">この端末: <strong id="appVersionLabel">v11</strong>　／　サーバー: <strong id="serverVersionLabel">未確認</strong></p>
+          <p class="version-line">この端末: <strong id="appVersionLabel">v12</strong>　／　サーバー: <strong id="serverVersionLabel">未確認</strong></p>
           <div class="btn-row">
             <button type="button" class="btn btn-primary" id="checkUpdateBtn">最新版を確認</button>
             <button type="button" class="btn btn-ghost" id="forceUpdateBtn">キャッシュを消去</button>
@@ -398,7 +384,7 @@
           <p>スマホで「ホーム画面に追加」するとアプリのように使えます。</p>
           <button type="button" class="btn btn-primary btn-block" id="installBtn">インストール</button>
         </div>
-        <p class="version-tag">起業ロードマップ v11</p>
+        <p class="version-tag">起業ロードマップ v12</p>
       </section>
     </main>
 
@@ -455,9 +441,9 @@
   <script src="https://www.gstatic.com/firebasejs/10.14.0/firebase-app-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.14.0/firebase-firestore-compat.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
-  <script src="firebase-config.js?v=11"></script>
-  <script src="sync.js?v=11"></script>
-  <script src="defaults.js?v=11"></script>
-  <script src="app.js?v=11"></script>
+  <script src="firebase-config.js?v=12"></script>
+  <script src="sync.js?v=12"></script>
+  <script src="defaults.js?v=12"></script>
+  <script src="app.js?v=12"></script>
 </body>
 </html>

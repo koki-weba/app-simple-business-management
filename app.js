@@ -4,7 +4,7 @@
 
   const D = window.StartupDefaults;
   const STORAGE_KEY = D.STORAGE_KEY;
-  const APP_VERSION = 11;
+  const APP_VERSION = 12;
   const CIRC = 326.7;
 
   const PAGE_META = {
@@ -21,6 +21,7 @@
   let chartRange = 6;
   let revenueChart = null;
   let snsInstagramChart = null;
+  let snsInstagramActionChart = null;
   let snsSalesChart = null;
   let taskFilter = "all";
   let deferredInstall = null;
@@ -395,15 +396,6 @@
     return data.tasks.some((t) => t.id === id);
   }
 
-  function getDmTemplatesList() {
-    const defaults = D.DM_TEMPLATES.filter((t) => !data.hiddenDmTemplateIds.includes(t.id)).map((t) => ({
-      ...t,
-      isCustom: false,
-    }));
-    const custom = data.customDmTemplates.map((t) => ({ ...t, isCustom: true }));
-    return [...defaults, ...custom];
-  }
-
   function addToTrash(entityType, item, label) {
     data.trash.unshift({
       trashId: uid(),
@@ -576,187 +568,210 @@
     }
   }
 
+  function destroyChart(chart) {
+    if (chart) chart.destroy();
+    return null;
+  }
+
+  function snsLineDataset(label, values, color, opts = {}) {
+    const rgba = (hexOrRgb, a) => {
+      if (hexOrRgb.startsWith("rgb(")) {
+        return hexOrRgb.replace("rgb(", "rgba(").replace(")", `, ${a})`);
+      }
+      return hexOrRgb;
+    };
+    return {
+      label,
+      data: values,
+      borderColor: color,
+      backgroundColor: opts.fill ? rgba(color, 0.12) : "transparent",
+      fill: !!opts.fill,
+      tension: 0.32,
+      borderWidth: 2.75,
+      borderDash: opts.dash || [],
+      pointRadius: 4.5,
+      pointHoverRadius: 7,
+      pointBackgroundColor: "#ffffff",
+      pointBorderColor: color,
+      pointBorderWidth: 2.25,
+      pointHitRadius: 12,
+    };
+  }
+
+  function snsLineChartOptions(tickFmt) {
+    return {
+      responsive: true,
+      maintainAspectRatio: false,
+      layout: { padding: { top: 4, right: 4, bottom: 0, left: 0 } },
+      interaction: { mode: "index", intersect: false },
+      plugins: {
+        legend: {
+          position: "bottom",
+          labels: {
+            usePointStyle: true,
+            pointStyle: "circle",
+            boxWidth: 7,
+            boxHeight: 7,
+            padding: 16,
+            font: { size: 11, weight: "600", family: "DM Sans, Noto Sans JP, sans-serif" },
+            color: "#475569",
+          },
+        },
+        tooltip: {
+          backgroundColor: "rgba(15, 23, 42, 0.92)",
+          titleFont: { size: 12, weight: "600" },
+          bodyFont: { size: 12 },
+          padding: 10,
+          cornerRadius: 10,
+          displayColors: true,
+          boxPadding: 4,
+          callbacks: tickFmt
+            ? {
+                label(ctx) {
+                  const v = ctx.parsed.y;
+                  return ` ${ctx.dataset.label}: ${tickFmt(v)}`;
+                },
+              }
+            : undefined,
+        },
+      },
+      scales: {
+        x: {
+          grid: { display: false },
+          border: { display: false },
+          ticks: {
+            font: { size: 11, weight: "500" },
+            color: "#64748b",
+            maxRotation: 0,
+            autoSkip: true,
+            maxTicksLimit: 8,
+          },
+        },
+        y: {
+          beginAtZero: true,
+          border: { display: false },
+          grid: {
+            color: "rgba(148, 163, 184, 0.22)",
+            drawTicks: false,
+          },
+          ticks: {
+            font: { size: 11 },
+            color: "#64748b",
+            maxTicksLimit: 5,
+            padding: 8,
+            callback: tickFmt || ((v) => v),
+          },
+        },
+      },
+    };
+  }
+
   function renderSnsCharts() {
     if (typeof Chart === "undefined") return;
     const logs = [...(data.snsLogs || [])].sort((a, b) =>
       (a.weekStart || "").localeCompare(b.weekStart || "")
     );
-    const slice = logs.slice(-8);
-    const labels = slice.map((l) => getWeekLabel(l.weekStart).split("〜")[0]);
+    const slice = logs.slice(-12);
+    const labels = slice.map((l) => {
+      const d = new Date((l.weekStart || "") + "T00:00:00");
+      if (Number.isNaN(d.getTime())) return getWeekLabel(l.weekStart).split("〜")[0];
+      return `${d.getMonth() + 1}/${d.getDate()}`;
+    });
+    const hasData = slice.length > 0;
+    const igEmpty = $("#snsIgEmpty");
+    const salesEmpty = $("#snsSalesEmpty");
+    if (igEmpty) igEmpty.hidden = hasData;
+    if (salesEmpty) salesEmpty.hidden = hasData;
 
-    /* Instagram チャート */
+    const fmt = (v) => (v == null ? "0" : Number(v).toLocaleString());
+
+    /* Instagram: 閲覧・リーチ（同スケール） */
     const igCtx = $("#snsInstagramChart");
-    if (igCtx) {
-      if (snsInstagramChart) snsInstagramChart.destroy();
+    snsInstagramChart = destroyChart(snsInstagramChart);
+    if (igCtx && hasData) {
       snsInstagramChart = new Chart(igCtx, {
         type: "line",
         data: {
           labels,
           datasets: [
-            {
-              label: "閲覧数",
-              data: slice.map((l) => l.instagram?.views ?? 0),
-              borderColor: "#405de6",
-              backgroundColor: "rgba(64,93,230,0.08)",
-              fill: true,
-              tension: 0.35,
-              yAxisID: "yL",
-            },
-            {
-              label: "リーチ",
-              data: slice.map((l) => l.instagram?.reach ?? 0),
-              borderColor: "#e1306c",
-              tension: 0.35,
-              yAxisID: "yL",
-            },
-            {
-              label: "プロフィールへのアクセス",
-              data: slice.map((l) => l.instagram?.profileAccess ?? 0),
-              borderColor: "#833ab4",
-              tension: 0.35,
-              yAxisID: "yR",
-            },
-            {
-              label: "外部リンクのタップ数",
-              data: slice.map((l) => l.instagram?.linkTaps ?? 0),
-              borderColor: "#fd1d1d",
-              borderDash: [4, 3],
-              tension: 0.35,
-              yAxisID: "yR",
-            },
+            snsLineDataset(
+              "閲覧数",
+              slice.map((l) => l.instagram?.views ?? 0),
+              "rgb(37, 99, 235)",
+              { fill: true }
+            ),
+            snsLineDataset(
+              "リーチ",
+              slice.map((l) => l.instagram?.reach ?? 0),
+              "rgb(225, 48, 108)"
+            ),
           ],
         },
-        options: {
-          responsive: true,
-          maintainAspectRatio: false,
-          interaction: { mode: "index", intersect: false },
-          plugins: {
-            legend: {
-              position: "bottom",
-              labels: { boxWidth: 10, font: { size: 10 } },
-            },
-          },
-          scales: {
-            yL: {
-              type: "linear",
-              position: "left",
-              beginAtZero: true,
-              ticks: { font: { size: 9 }, maxTicksLimit: 5 },
-            },
-            yR: {
-              type: "linear",
-              position: "right",
-              beginAtZero: true,
-              grid: { drawOnChartArea: false },
-              ticks: { font: { size: 9 }, maxTicksLimit: 5 },
-            },
-          },
-        },
+        options: snsLineChartOptions(fmt),
       });
     }
 
-    /* 営業ファネル チャート */
-    const slCtx = $("#snsSalesChart");
-    if (slCtx) {
-      if (snsSalesChart) snsSalesChart.destroy();
-      snsSalesChart = new Chart(slCtx, {
-        type: "bar",
+    /* Instagram: プロフィール・リンク（小さい数値専用） */
+    const igActCtx = $("#snsInstagramActionChart");
+    snsInstagramActionChart = destroyChart(snsInstagramActionChart);
+    if (igActCtx && hasData) {
+      snsInstagramActionChart = new Chart(igActCtx, {
+        type: "line",
         data: {
           labels,
           datasets: [
-            {
-              label: "DM送信",
-              data: slice.map((l) => l.sales?.dmSent ?? 0),
-              backgroundColor: "rgba(37,99,235,0.72)",
-              borderRadius: 3,
-            },
-            {
-              label: "返信",
-              data: slice.map((l) => l.sales?.replies ?? 0),
-              backgroundColor: "rgba(16,185,129,0.72)",
-              borderRadius: 3,
-            },
-            {
-              label: "商談",
-              data: slice.map((l) => l.sales?.meetings ?? 0),
-              backgroundColor: "rgba(245,158,11,0.82)",
-              borderRadius: 3,
-            },
-            {
-              label: "受注",
-              data: slice.map((l) => l.sales?.orders ?? 0),
-              backgroundColor: "rgba(239,68,68,0.82)",
-              borderRadius: 3,
-            },
+            snsLineDataset(
+              "プロフィール",
+              slice.map((l) => l.instagram?.profileAccess ?? 0),
+              "rgb(124, 58, 237)",
+              { fill: true }
+            ),
+            snsLineDataset(
+              "リンクタップ",
+              slice.map((l) => l.instagram?.linkTaps ?? 0),
+              "rgb(234, 88, 12)"
+            ),
           ],
         },
-        options: {
-          responsive: true,
-          maintainAspectRatio: false,
-          interaction: { mode: "index", intersect: false },
-          plugins: {
-            legend: {
-              position: "bottom",
-              labels: { boxWidth: 10, font: { size: 10 } },
-            },
-          },
-          scales: {
-            y: {
-              beginAtZero: true,
-              ticks: { font: { size: 9 }, maxTicksLimit: 5 },
-            },
-          },
-        },
+        options: snsLineChartOptions(fmt),
       });
     }
-  }
 
-  function renderSnsList() {
-    const list = $("#snsLogList");
-    if (!list) return;
-    const sorted = [...(data.snsLogs || [])].sort((a, b) =>
-      (b.weekStart || "").localeCompare(a.weekStart || "")
-    );
-    if (!sorted.length) {
-      list.innerHTML =
-        '<p class="empty-state">まだ記録がありません。毎週日曜日に入力しましょう。</p>';
-      return;
+    /* 営業ファネル: 折れ線 */
+    const slCtx = $("#snsSalesChart");
+    snsSalesChart = destroyChart(snsSalesChart);
+    if (slCtx && hasData) {
+      snsSalesChart = new Chart(slCtx, {
+        type: "line",
+        data: {
+          labels,
+          datasets: [
+            snsLineDataset(
+              "DM送信",
+              slice.map((l) => l.sales?.dmSent ?? 0),
+              "rgb(37, 99, 235)",
+              { fill: true }
+            ),
+            snsLineDataset(
+              "返信",
+              slice.map((l) => l.sales?.replies ?? 0),
+              "rgb(5, 150, 105)"
+            ),
+            snsLineDataset(
+              "商談",
+              slice.map((l) => l.sales?.meetings ?? 0),
+              "rgb(217, 119, 6)"
+            ),
+            snsLineDataset(
+              "受注",
+              slice.map((l) => l.sales?.orders ?? 0),
+              "rgb(220, 38, 38)"
+            ),
+          ],
+        },
+        options: snsLineChartOptions(fmt),
+      });
     }
-    list.innerHTML = sorted
-      .slice(0, 12)
-      .map((l) => {
-        const ig = l.instagram || {};
-        const sl = l.sales || {};
-        return `
-        <div class="log-item" data-id="${l.id}">
-          <div class="log-item-body">
-            <div class="log-date">${getWeekLabel(l.weekStart)}</div>
-            <div class="log-body sns-summary-row">
-              <span class="sns-chip sns-chip--ig">📱 閲覧 ${(ig.views ?? 0).toLocaleString()} ／ リーチ ${(ig.reach ?? 0).toLocaleString()}</span>
-              <span class="sns-chip sns-chip--sl">💼 DM${sl.dmSent ?? 0} → 受注${sl.orders ?? 0}</span>
-            </div>
-          </div>
-          ${actionButtons()}
-        </div>`;
-      })
-      .join("");
-
-    list.querySelectorAll(".log-item-body").forEach((el) => {
-      el.addEventListener("click", () =>
-        openSnsLogModal(el.closest(".log-item").dataset.id)
-      );
-    });
-    bindItemActions(
-      list,
-      (id) => openSnsLogModal(id),
-      (id) => {
-        const log = (data.snsLogs || []).find((x) => x.id === id);
-        if (!log) return;
-        softDelete("snsLog", log, `${getWeekLabel(log.weekStart)}の記録`, () => {
-          data.snsLogs = data.snsLogs.filter((x) => x.id !== id);
-        });
-      }
-    );
   }
 
   function openSnsLogModal(logId) {
@@ -1680,180 +1695,8 @@
     $("#dmWeekText").textContent = `今週 ${week} / ${weekGoal} 件`;
     $("#dmWeekBar").style.width = `${Math.min(100, (week / weekGoal) * 100)}%`;
 
-    $("#dmTemplates").innerHTML = getDmTemplatesList()
-      .map(
-        (t) => `
-      <div class="tpl-item" data-id="${t.id}" data-custom="${t.isCustom}">
-        <div class="tpl-head">
-          <h4>${escapeHtml(t.name)}</h4>
-          <div class="tpl-actions">
-            <button type="button" class="icon-action" data-tpl-edit="${t.id}" data-custom="${t.isCustom}" title="編集">✎</button>
-            <button type="button" class="icon-action danger" data-tpl-del="${t.id}" data-custom="${t.isCustom}" title="削除">🗑</button>
-          </div>
-        </div>
-        <ol>${t.steps.map((s) => `<li>${escapeHtml(s)}</li>`).join("")}</ol>
-      </div>`
-      )
-      .join("");
-
-    $("#dmTemplates").querySelectorAll("[data-tpl-edit]").forEach((btn) => {
-      btn.addEventListener("click", () => openDmTemplateModal(btn.dataset.tplEdit, btn.dataset.custom === "true"));
-    });
-    $("#dmTemplates").querySelectorAll("[data-tpl-del]").forEach((btn) => {
-      btn.addEventListener("click", () => {
-        const id = btn.dataset.tplDel;
-        const isCustom = btn.dataset.custom === "true";
-        if (isCustom) {
-          const tpl = data.customDmTemplates.find((x) => x.id === id);
-          if (!tpl) return;
-          softDelete("customDmTemplate", tpl, tpl.name, () => {
-            data.customDmTemplates = data.customDmTemplates.filter((x) => x.id !== id);
-          });
-        } else {
-          const tpl = D.DM_TEMPLATES.find((x) => x.id === id);
-          if (!tpl) return;
-          data.hiddenDmTemplateIds.push(id);
-          saveData();
-          toast(`「${tpl.name}」を非表示にしました`, () => {
-            data.hiddenDmTemplateIds = data.hiddenDmTemplateIds.filter((x) => x !== id);
-            saveData();
-          });
-        }
-      });
-    });
-
-    const allLogs = [...data.salesLogs].sort((a, b) => (b.date || "").localeCompare(a.date || ""));
-    const list = $("#salesLogList");
-    if (!allLogs.length) {
-      list.innerHTML = '<p class="empty-state">営業ログがありません</p>';
-      return;
-    }
-    list.innerHTML = allLogs
-      .slice(0, 50)
-      .map(
-        (l) => `
-      <div class="log-item" data-id="${l.id}">
-        <div class="log-item-body">
-          <div class="log-date">${l.date} · ${l.type === "dm" ? `DM ${l.count || 1}件` : escapeHtml(l.channel || "営業")}</div>
-          <div class="log-body">${escapeHtml(l.notes || "(メモなし)")}</div>
-        </div>
-        ${actionButtons()}
-      </div>`
-      )
-      .join("");
-    list.querySelectorAll(".log-item-body").forEach((el) => {
-      el.addEventListener("click", () => openSalesLogModal(el.closest(".log-item").dataset.id));
-    });
-    bindItemActions(
-      list,
-      (id) => openSalesLogModal(id),
-      (id) => {
-        const log = data.salesLogs.find((x) => x.id === id);
-        if (!log) return;
-        const label = log.type === "dm" ? `${log.date} DM ${log.count || 1}件` : log.notes?.slice(0, 20) || "営業ログ";
-        softDelete("salesLog", log, label, () => {
-          data.salesLogs = data.salesLogs.filter((x) => x.id !== id);
-        });
-      }
-    );
-
     renderSnsHint();
-    renderSnsList();
-  }
-
-  function openDmTemplateModal(id, isCustom) {
-    let tpl = null;
-    if (isCustom && id) tpl = data.customDmTemplates.find((x) => x.id === id);
-    else if (id) tpl = D.DM_TEMPLATES.find((x) => x.id === id);
-    openModal(
-      tpl ? "DMテンプレートを編集" : "DMテンプレートを追加",
-      `
-      <label class="field"><span>名前</span><input type="text" id="dtName" class="input" value="${escapeHtml(tpl?.name ?? "")}" /></label>
-      <label class="field"><span>ステップ（1行1ステップ）</span><textarea id="dtSteps" class="input" rows="5">${escapeHtml((tpl?.steps || []).join("\n"))}</textarea></label>
-    `,
-      `<button type="button" class="btn btn-ghost" id="modalCancel">キャンセル</button>
-       <button type="button" class="btn btn-primary" id="modalSave">保存</button>`
-    );
-    $("#modalCancel").onclick = closeModal;
-    $("#modalSave").onclick = () => {
-      const name = $("#dtName").value.trim();
-      const steps = $("#dtSteps").value.split("\n").map((s) => s.trim()).filter(Boolean);
-      if (!name || !steps.length) return toast("名前とステップを入力してください");
-      if (isCustom && id) {
-        const t = data.customDmTemplates.find((x) => x.id === id);
-        if (t) {
-          t.name = name;
-          t.steps = steps;
-        }
-      } else if (!id) {
-        data.customDmTemplates.push({ id: uid(), name, steps, createdAt: new Date().toISOString() });
-      } else {
-        data.customDmTemplates.push({
-          id: uid(),
-          name,
-          steps,
-          basedOn: id,
-          createdAt: new Date().toISOString(),
-        });
-      }
-      closeModal();
-      saveData();
-      toast("テンプレートを保存しました");
-    };
-  }
-
-  function openSalesLogModal(logId) {
-    const existing = logId ? data.salesLogs.find((x) => x.id === logId) : null;
-    const isDm = existing?.type === "dm";
-    openModal(
-      existing ? "営業ログを編集" : "営業ログを追加",
-      `
-      <label class="field"><span>日付</span><input type="date" id="sDate" class="input" value="${existing?.date || todayStr()}" /></label>
-      ${isDm ? `<label class="field"><span>DM件数</span><input type="number" id="sCount" class="input" min="1" value="${existing?.count || 1}" /></label>` : `
-      <label class="field"><span>チャネル</span>
-        <select id="sChannel" class="input">
-          ${["X (Twitter)", "Instagram", "紹介", "その他"]
-            .map((c) => `<option ${existing?.channel === c ? "selected" : ""}>${c}</option>`)
-            .join("")}
-        </select>
-      </label>`}
-      <label class="field"><span>内容</span><textarea id="sNotes" class="input" placeholder="反応・次のアクションなど">${escapeHtml(existing?.notes ?? "")}</textarea></label>
-    `,
-      `<button type="button" class="btn btn-danger btn-sm" id="modalDelete" ${existing ? "" : "hidden"}>削除</button>
-       <button type="button" class="btn btn-ghost" id="modalCancel">キャンセル</button>
-       <button type="button" class="btn btn-primary" id="modalSave">保存</button>`
-    );
-    $("#modalCancel").onclick = closeModal;
-    if (existing) {
-      $("#modalDelete").onclick = () => {
-        const log = existing;
-        closeModal();
-        softDelete("salesLog", log, log.notes?.slice(0, 20) || "営業ログ", () => {
-          data.salesLogs = data.salesLogs.filter((x) => x.id !== logId);
-        });
-      };
-    }
-    $("#modalSave").onclick = () => {
-      if (existing) {
-        existing.date = $("#sDate").value;
-        existing.notes = $("#sNotes").value.trim();
-        if (isDm) existing.count = parseNum($("#sCount").value) || 1;
-        else existing.channel = $("#sChannel").value;
-        existing.updatedAt = new Date().toISOString();
-      } else {
-        data.salesLogs.unshift({
-          id: uid(),
-          type: "log",
-          date: $("#sDate").value,
-          channel: $("#sChannel").value,
-          notes: $("#sNotes").value.trim(),
-          createdAt: new Date().toISOString(),
-        });
-      }
-      closeModal();
-      saveData();
-      toast(existing ? "営業ログを更新しました" : "営業ログを追加しました");
-    };
+    renderSnsCharts();
   }
 
   /* ── Render: Clients ── */
@@ -2551,8 +2394,6 @@
     $("#editMonthTargetBtn")?.addEventListener("click", openMonthTargetModal);
     $("#editFocusBtn")?.addEventListener("click", () => openMonthPlanModal(currentMonthStr()));
     $("#editRoadmapIntroBtn")?.addEventListener("click", openRoadmapIntroModal);
-    $("#addSalesLogBtn").addEventListener("click", () => openSalesLogModal());
-    $("#addDmTemplateBtn")?.addEventListener("click", () => openDmTemplateModal(null, true));
     $("#addSnsLogBtn")?.addEventListener("click", () => openSnsLogModal(null));
     $("#addClientBtn").addEventListener("click", () => openClientModal());
     $("#addTaskBtn").addEventListener("click", () => openTaskModal());
