@@ -1659,14 +1659,7 @@ textarea.input { min-height: 80px; resize: vertical; }
 }
 
 .chart-wrap-sns-tall {
-  height: 240px;
-}
-
-.sns-chart-caption {
-  margin: 10px 0 0;
-  font-size: 0.75rem;
-  font-weight: 600;
-  color: var(--slate-500);
+  height: 260px;
 }
 
 .sns-chart-empty {

@@ -4,7 +4,7 @@
 
   const D = window.StartupDefaults;
   const STORAGE_KEY = D.STORAGE_KEY;
-  const APP_VERSION = 12;
+  const APP_VERSION = 14;
   const CIRC = 326.7;
 
   const PAGE_META = {
@@ -21,7 +21,6 @@
   let chartRange = 6;
   let revenueChart = null;
   let snsInstagramChart = null;
-  let snsInstagramActionChart = null;
   let snsSalesChart = null;
   let taskFilter = "all";
   let deferredInstall = null;
@@ -580,7 +579,7 @@
       }
       return hexOrRgb;
     };
-    return {
+    const ds = {
       label,
       data: values,
       borderColor: color,
@@ -596,13 +595,15 @@
       pointBorderWidth: 2.25,
       pointHitRadius: 12,
     };
+    if (opts.yAxisID) ds.yAxisID = opts.yAxisID;
+    return ds;
   }
 
-  function snsLineChartOptions(tickFmt) {
-    return {
+  function snsLineChartOptions(tickFmt, dualAxis = false) {
+    const base = {
       responsive: true,
       maintainAspectRatio: false,
-      layout: { padding: { top: 4, right: 4, bottom: 0, left: 0 } },
+      layout: { padding: { top: 4, right: dualAxis ? 2 : 4, bottom: 0, left: 0 } },
       interaction: { mode: "index", intersect: false },
       plugins: {
         legend: {
@@ -612,7 +613,7 @@
             pointStyle: "circle",
             boxWidth: 7,
             boxHeight: 7,
-            padding: 16,
+            padding: 14,
             font: { size: 11, weight: "600", family: "DM Sans, Noto Sans JP, sans-serif" },
             color: "#475569",
           },
@@ -647,23 +648,71 @@
             maxTicksLimit: 8,
           },
         },
-        y: {
-          beginAtZero: true,
-          border: { display: false },
-          grid: {
-            color: "rgba(148, 163, 184, 0.22)",
-            drawTicks: false,
-          },
-          ticks: {
-            font: { size: 11 },
-            color: "#64748b",
-            maxTicksLimit: 5,
-            padding: 8,
-            callback: tickFmt || ((v) => v),
-          },
-        },
       },
     };
+
+    if (dualAxis) {
+      base.scales.yL = {
+        type: "linear",
+        position: "left",
+        beginAtZero: true,
+        border: { display: false },
+        title: {
+          display: true,
+          text: "閲覧・リーチ",
+          color: "#64748b",
+          font: { size: 10, weight: "600" },
+        },
+        grid: {
+          color: "rgba(148, 163, 184, 0.22)",
+          drawTicks: false,
+        },
+        ticks: {
+          font: { size: 10 },
+          color: "#64748b",
+          maxTicksLimit: 5,
+          padding: 6,
+          callback: tickFmt || ((v) => v),
+        },
+      };
+      base.scales.yR = {
+        type: "linear",
+        position: "right",
+        beginAtZero: true,
+        border: { display: false },
+        title: {
+          display: true,
+          text: "PF・リンク",
+          color: "#64748b",
+          font: { size: 10, weight: "600" },
+        },
+        grid: { drawOnChartArea: false },
+        ticks: {
+          font: { size: 10 },
+          color: "#64748b",
+          maxTicksLimit: 5,
+          padding: 6,
+          callback: tickFmt || ((v) => v),
+        },
+      };
+    } else {
+      base.scales.y = {
+        beginAtZero: true,
+        border: { display: false },
+        grid: {
+          color: "rgba(148, 163, 184, 0.22)",
+          drawTicks: false,
+        },
+        ticks: {
+          font: { size: 11 },
+          color: "#64748b",
+          maxTicksLimit: 5,
+          padding: 8,
+          callback: tickFmt || ((v) => v),
+        },
+      };
+    }
+    return base;
   }
 
   function renderSnsCharts() {
@@ -685,7 +734,7 @@
 
     const fmt = (v) => (v == null ? "0" : Number(v).toLocaleString());
 
-    /* Instagram: 閲覧・リーチ（同スケール） */
+    /* Instagram: 4指標を1グラフ（左=閲覧・リーチ / 右=プロフィール・リンク） */
     const igCtx = $("#snsInstagramChart");
     snsInstagramChart = destroyChart(snsInstagramChart);
     if (igCtx && hasData) {
@@ -698,42 +747,29 @@
               "閲覧数",
               slice.map((l) => l.instagram?.views ?? 0),
               "rgb(37, 99, 235)",
-              { fill: true }
+              { fill: true, yAxisID: "yL" }
             ),
             snsLineDataset(
               "リーチ",
               slice.map((l) => l.instagram?.reach ?? 0),
-              "rgb(225, 48, 108)"
+              "rgb(225, 48, 108)",
+              { yAxisID: "yL" }
             ),
-          ],
-        },
-        options: snsLineChartOptions(fmt),
-      });
-    }
-
-    /* Instagram: プロフィール・リンク（小さい数値専用） */
-    const igActCtx = $("#snsInstagramActionChart");
-    snsInstagramActionChart = destroyChart(snsInstagramActionChart);
-    if (igActCtx && hasData) {
-      snsInstagramActionChart = new Chart(igActCtx, {
-        type: "line",
-        data: {
-          labels,
-          datasets: [
             snsLineDataset(
               "プロフィール",
               slice.map((l) => l.instagram?.profileAccess ?? 0),
               "rgb(124, 58, 237)",
-              { fill: true }
+              { yAxisID: "yR" }
             ),
             snsLineDataset(
               "リンクタップ",
               slice.map((l) => l.instagram?.linkTaps ?? 0),
-              "rgb(234, 88, 12)"
+              "rgb(234, 88, 12)",
+              { yAxisID: "yR" }
             ),
           ],
         },
-        options: snsLineChartOptions(fmt),
+        options: snsLineChartOptions(fmt, true),
       });
     }
 
@@ -774,34 +810,71 @@
     }
   }
 
+  function findSnsLogByWeek(weekStart) {
+    if (!weekStart || !data.snsLogs) return null;
+    const sunday = getSundayOf(weekStart);
+    return (
+      data.snsLogs.find((x) => x.weekStart === sunday || x.weekStart === weekStart) || null
+    );
+  }
+
+  function snsFieldVal(v) {
+    return v == null || v === "" ? "" : v;
+  }
+
   function openSnsLogModal(logId) {
     if (!data.snsLogs) data.snsLogs = [];
-    const existing = logId ? data.snsLogs.find((x) => x.id === logId) : null;
-    const defaultWeek = getSundayOf();
-    const weekVal = existing?.weekStart || defaultWeek;
-    const ig = existing?.instagram || {};
-    const sl = existing?.sales || {};
+    let existing = logId
+      ? data.snsLogs.find((x) => x.id === logId) || null
+      : findSnsLogByWeek(getSundayOf());
+    const defaultWeek = existing?.weekStart || getSundayOf();
+
+    const fillFields = (log) => {
+      const ig = log?.instagram || {};
+      const sl = log?.sales || {};
+      const set = (id, val) => {
+        const el = $(id);
+        if (el) el.value = snsFieldVal(val);
+      };
+      set("#snsIgViews", ig.views);
+      set("#snsIgReach", ig.reach);
+      set("#snsIgProfile", ig.profileAccess);
+      set("#snsIgLink", ig.linkTaps);
+      set("#snsSlDm", sl.dmSent);
+      set("#snsSlReply", sl.replies);
+      set("#snsSlMeet", sl.meetings);
+      set("#snsSlOrder", sl.orders);
+      const notes = $("#snsNotesField");
+      if (notes) notes.value = log?.notes ?? "";
+    };
+
+    const syncChrome = () => {
+      const title = $("#modalTitle");
+      if (title) title.textContent = existing ? "週次記録を編集" : "週次SNS・営業記録";
+      const del = $("#modalDelete");
+      if (del) del.hidden = !existing;
+    };
 
     openModal(
       existing ? "週次記録を編集" : "週次SNS・営業記録",
-      `<p class="muted small" style="margin-bottom:0.75rem">週の開始（日曜日）を選択して記録します</p>
-      <label class="field"><span>週（日曜日の日付）</span><input type="date" id="snsWeekDate" class="input" value="${weekVal}" /></label>
+      `<p class="muted small" style="margin-bottom:0.75rem">同じ週を開くと、保存済みの内容が続きから編集できます</p>
+      <label class="field"><span>週（日曜日の日付）</span><input type="date" id="snsWeekDate" class="input" value="${defaultWeek}" /></label>
       <div class="sns-modal-section">
         <p class="sns-modal-label">📱 Instagram</p>
         <div class="sns-form-grid">
-          <label class="field"><span>閲覧数</span><input type="number" id="snsIgViews" class="input" min="0" value="${ig.views ?? ""}" placeholder="0" /></label>
-          <label class="field"><span>リーチ</span><input type="number" id="snsIgReach" class="input" min="0" value="${ig.reach ?? ""}" placeholder="0" /></label>
-          <label class="field"><span>プロフィールへのアクセス</span><input type="number" id="snsIgProfile" class="input" min="0" value="${ig.profileAccess ?? ""}" placeholder="0" /></label>
-          <label class="field"><span>外部リンクのタップ数</span><input type="number" id="snsIgLink" class="input" min="0" value="${ig.linkTaps ?? ""}" placeholder="0" /></label>
+          <label class="field"><span>閲覧数</span><input type="number" id="snsIgViews" class="input" min="0" value="${snsFieldVal(existing?.instagram?.views)}" placeholder="0" /></label>
+          <label class="field"><span>リーチ</span><input type="number" id="snsIgReach" class="input" min="0" value="${snsFieldVal(existing?.instagram?.reach)}" placeholder="0" /></label>
+          <label class="field"><span>プロフィールへのアクセス</span><input type="number" id="snsIgProfile" class="input" min="0" value="${snsFieldVal(existing?.instagram?.profileAccess)}" placeholder="0" /></label>
+          <label class="field"><span>外部リンクのタップ数</span><input type="number" id="snsIgLink" class="input" min="0" value="${snsFieldVal(existing?.instagram?.linkTaps)}" placeholder="0" /></label>
         </div>
       </div>
       <div class="sns-modal-section">
         <p class="sns-modal-label">💼 営業</p>
         <div class="sns-form-grid">
-          <label class="field"><span>DM送信数</span><input type="number" id="snsSlDm" class="input" min="0" value="${sl.dmSent ?? ""}" placeholder="0" /></label>
-          <label class="field"><span>返信数</span><input type="number" id="snsSlReply" class="input" min="0" value="${sl.replies ?? ""}" placeholder="0" /></label>
-          <label class="field"><span>商談数</span><input type="number" id="snsSlMeet" class="input" min="0" value="${sl.meetings ?? ""}" placeholder="0" /></label>
-          <label class="field"><span>受注数</span><input type="number" id="snsSlOrder" class="input" min="0" value="${sl.orders ?? ""}" placeholder="0" /></label>
+          <label class="field"><span>DM送信数</span><input type="number" id="snsSlDm" class="input" min="0" value="${snsFieldVal(existing?.sales?.dmSent)}" placeholder="0" /></label>
+          <label class="field"><span>返信数</span><input type="number" id="snsSlReply" class="input" min="0" value="${snsFieldVal(existing?.sales?.replies)}" placeholder="0" /></label>
+          <label class="field"><span>商談数</span><input type="number" id="snsSlMeet" class="input" min="0" value="${snsFieldVal(existing?.sales?.meetings)}" placeholder="0" /></label>
+          <label class="field"><span>受注数</span><input type="number" id="snsSlOrder" class="input" min="0" value="${snsFieldVal(existing?.sales?.orders)}" placeholder="0" /></label>
         </div>
       </div>
       <label class="field"><span>メモ</span><textarea id="snsNotesField" class="input" rows="2">${escapeHtml(existing?.notes ?? "")}</textarea></label>`,
@@ -811,18 +884,30 @@
     );
 
     $("#modalCancel").onclick = closeModal;
-    if (existing) {
-      $("#modalDelete").onclick = () => {
-        closeModal();
-        softDelete("snsLog", existing, `${getWeekLabel(existing.weekStart)}の記録`, () => {
-          data.snsLogs = data.snsLogs.filter((x) => x.id !== logId);
-        });
-      };
-    }
+
+    $("#snsWeekDate").addEventListener("change", () => {
+      const raw = $("#snsWeekDate").value;
+      if (!raw) return;
+      const sunday = getSundayOf(raw);
+      if (sunday !== raw) $("#snsWeekDate").value = sunday;
+      existing = findSnsLogByWeek(sunday);
+      fillFields(existing);
+      syncChrome();
+    });
+
+    $("#modalDelete").onclick = () => {
+      if (!existing) return;
+      const target = existing;
+      closeModal();
+      softDelete("snsLog", target, `${getWeekLabel(target.weekStart)}の記録`, () => {
+        data.snsLogs = data.snsLogs.filter((x) => x.id !== target.id);
+      });
+    };
 
     $("#modalSave").onclick = () => {
-      const weekStart = $("#snsWeekDate").value;
-      if (!weekStart) return toast("週を選択してください");
+      const raw = $("#snsWeekDate").value;
+      if (!raw) return toast("週を選択してください");
+      const weekStart = getSundayOf(raw);
 
       const payload = {
         id: existing?.id || uid(),
@@ -840,11 +925,12 @@
           orders: parseNum($("#snsSlOrder").value),
         },
         notes: $("#snsNotesField").value.trim(),
+        createdAt: existing?.createdAt || new Date().toISOString(),
         updatedAt: new Date().toISOString(),
       };
 
       const idx = data.snsLogs.findIndex(
-        (x) => x.weekStart === weekStart || x.id === payload.id
+        (x) => x.id === payload.id || x.weekStart === weekStart
       );
       if (idx >= 0) data.snsLogs[idx] = { ...data.snsLogs[idx], ...payload };
       else data.snsLogs.push(payload);
@@ -1488,12 +1574,32 @@
   }
 
   function openRecordModal(month) {
-    const existing = month ? getRecord(month) : null;
     const m = month || currentMonthStr();
+    let existing = getRecord(m) || null;
+
+    const fillMonthFields = (rec) => {
+      const set = (id, val) => {
+        const el = $(id);
+        if (el) el.value = val == null || val === "" ? "" : val;
+      };
+      set("#mRevenue", rec?.revenue);
+      set("#mRecurring", rec?.recurring);
+      set("#mTakeHome", rec?.takeHome);
+      const notes = $("#mNotes");
+      if (notes) notes.value = rec?.notes ?? "";
+    };
+
+    const syncChrome = () => {
+      const title = $("#modalTitle");
+      if (title) title.textContent = existing ? "月次記録を編集" : "月次記録を追加";
+      const del = $("#modalDelete");
+      if (del) del.hidden = !existing;
+    };
+
     openModal(
       existing ? "月次記録を編集" : "月次記録を追加",
       `
-      <label class="field"><span>対象月</span><input type="month" id="mMonth" class="input" value="${m}" ${existing ? "" : ""} /></label>
+      <label class="field"><span>対象月</span><input type="month" id="mMonth" class="input" value="${m}" /></label>
       <label class="field"><span>新規売上（円）</span><input type="number" id="mRevenue" class="input" min="0" value="${existing?.revenue ?? ""}" /></label>
       <label class="field"><span>継続売上（円）</span><input type="number" id="mRecurring" class="input" min="0" value="${existing?.recurring ?? ""}" /></label>
       <label class="field"><span>手取り（円・任意）</span><input type="number" id="mTakeHome" class="input" min="0" value="${existing?.takeHome ?? ""}" /></label>
@@ -1504,15 +1610,24 @@
        <button type="button" class="btn btn-primary" id="modalSave">保存</button>`
     );
     $("#modalCancel").onclick = closeModal;
-    if (existing) {
-      $("#modalDelete").onclick = () => {
-        const rec = getRecord(m);
-        closeModal();
-        softDelete("monthlyRecord", rec, `${m}の記録`, () => {
-          data.monthlyRecords = data.monthlyRecords.filter((x) => x.month !== m);
-        });
-      };
-    }
+
+    $("#mMonth").addEventListener("change", () => {
+      const monthKey = $("#mMonth").value;
+      existing = monthKey ? getRecord(monthKey) || null : null;
+      fillMonthFields(existing);
+      syncChrome();
+    });
+
+    $("#modalDelete").onclick = () => {
+      if (!existing) return;
+      const monthKey = existing.month;
+      const rec = existing;
+      closeModal();
+      softDelete("monthlyRecord", rec, `${monthKey}の記録`, () => {
+        data.monthlyRecords = data.monthlyRecords.filter((x) => x.month !== monthKey);
+      });
+    };
+
     $("#modalSave").onclick = () => {
       const monthKey = $("#mMonth").value;
       if (!monthKey) return toast("月を選択してください");
