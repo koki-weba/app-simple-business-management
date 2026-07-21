@@ -4,7 +4,7 @@
 
   const D = window.StartupDefaults;
   const STORAGE_KEY = D.STORAGE_KEY;
-  const APP_VERSION = 15;
+  const APP_VERSION = 16;
   const CIRC = 326.7;
 
   const PAGE_META = {
@@ -13,6 +13,7 @@
     kpi: { title: "KPI", sub: "月次売上と手取り" },
     sales: { title: "SNS", sub: "Instagram・営業の週次推移" },
     clients: { title: "案件", sub: "クライアントと実績" },
+    list: { title: "リスト", sub: "Instagram ID管理" },
     tasks: { title: "タスク", sub: "行動と戦略メモ" },
     settings: { title: "設定", sub: "目標・データ管理" },
   };
@@ -23,6 +24,7 @@
   let snsInstagramChart = null;
   let snsSalesChart = null;
   let taskFilter = "all";
+  let igSearchQuery = "";
   let deferredInstall = null;
   let undoCallback = null;
   let swRegistration = null;
@@ -32,6 +34,7 @@
 
   const ENTITY_LABELS = {
     client: "案件",
+    igList: "Instagram ID",
     customTask: "タスク",
     defaultTask: "タスク",
     note: "メモ",
@@ -415,6 +418,11 @@
       case "client": {
         const exists = data.clients.some((c) => c.id === item.id);
         if (!exists) data.clients.unshift(item);
+        break;
+      }
+      case "igList": {
+        if (!data.igList) data.igList = [];
+        if (!data.igList.some((x) => x.id === item.id)) data.igList.unshift(item);
         break;
       }
       case "customTask":
@@ -1908,6 +1916,149 @@
     };
   }
 
+  /* ── Render: Instagram List ── */
+  function normalizeIgId(raw) {
+    return String(raw || "")
+      .trim()
+      .replace(/^@+/, "")
+      .toLowerCase();
+  }
+
+  function findIgDuplicate(normalizedId, excludeId) {
+    if (!normalizedId || !data.igList) return null;
+    return data.igList.find(
+      (x) => normalizeIgId(x.instagramId) === normalizedId && x.id !== excludeId
+    ) || null;
+  }
+
+  function getFilteredIgList() {
+    const list = Array.isArray(data.igList) ? data.igList : [];
+    const q = normalizeIgId(igSearchQuery);
+    if (!q) return list;
+    return list.filter((x) => {
+      const id = normalizeIgId(x.instagramId);
+      const name = String(x.name || "").toLowerCase();
+      const memo = String(x.memo || "").toLowerCase();
+      return id.includes(q) || name.includes(q) || memo.includes(q);
+    });
+  }
+
+  function renderIgList() {
+    if (!data.igList) data.igList = [];
+    const all = data.igList;
+    const filtered = getFilteredIgList();
+    const summary = $("#igSummary");
+    if (summary) {
+      summary.innerHTML = `
+        <div class="summary-box"><strong>${all.length}</strong><span>登録数</span></div>
+        <div class="summary-box"><strong>${filtered.length}</strong><span>表示中</span></div>`;
+    }
+
+    const list = $("#igList");
+    if (!list) return;
+    if (!all.length) {
+      list.innerHTML =
+        '<p class="empty-state">Instagram IDがありません。「+ 追加」から登録してください。</p>';
+      return;
+    }
+    if (!filtered.length) {
+      list.innerHTML = '<p class="empty-state">該当するIDが見つかりません</p>';
+      return;
+    }
+    list.innerHTML = filtered
+      .map(
+        (x) => `
+      <div class="client-item ig-item" data-id="${x.id}">
+        <h4>@${escapeHtml(x.instagramId)}</h4>
+        ${x.name?.trim() ? `<p class="client-memo">${escapeHtml(x.name)}</p>` : ""}
+        ${x.memo?.trim() ? `<p class="client-memo">${escapeHtml(x.memo)}</p>` : ""}
+        <div class="client-tags">
+          <span class="tag">Instagram</span>
+          ${x.createdAt ? `<span class="tag">${escapeHtml(String(x.createdAt).slice(0, 10))}</span>` : ""}
+        </div>
+      </div>`
+      )
+      .join("");
+    list.querySelectorAll(".ig-item").forEach((el) => {
+      el.addEventListener("click", () => openIgListModal(el.dataset.id));
+    });
+  }
+
+  function updateIgDupHint(excludeId) {
+    const hint = $("#igDupHint");
+    const input = $("#igId");
+    if (!hint || !input) return;
+    const norm = normalizeIgId(input.value);
+    if (!norm) {
+      hint.textContent = "";
+      hint.className = "ig-dup-hint";
+      return;
+    }
+    const dup = findIgDuplicate(norm, excludeId);
+    if (dup) {
+      hint.textContent = `重複: @${dup.instagramId} はすでに登録済みです`;
+      hint.className = "ig-dup-hint is-dup";
+    } else {
+      hint.textContent = "未登録のIDです（登録できます）";
+      hint.className = "ig-dup-hint is-ok";
+    }
+  }
+
+  function openIgListModal(id) {
+    if (!data.igList) data.igList = [];
+    const item = id ? data.igList.find((x) => x.id === id) : null;
+    openModal(
+      item ? "Instagram IDを編集" : "Instagram IDを登録",
+      `
+      <label class="field">
+        <span>Instagram ID</span>
+        <input type="text" id="igId" class="input" value="${escapeHtml(item?.instagramId ?? "")}" placeholder="例：clinic_tokyo（@なし）" autocomplete="off" />
+      </label>
+      <p class="ig-dup-hint" id="igDupHint"></p>
+      <label class="field"><span>名前・店舗名（任意）</span><input type="text" id="igName" class="input" value="${escapeHtml(item?.name ?? "")}" placeholder="例：〇〇クリニック" /></label>
+      <label class="field"><span>メモ（任意）</span><textarea id="igMemo" class="input" placeholder="業種・DM状況など">${escapeHtml(item?.memo ?? "")}</textarea></label>
+    `,
+      `<button type="button" class="btn btn-danger btn-sm" id="modalDelete" ${item ? "" : "hidden"}>削除</button>
+       <button type="button" class="btn btn-ghost" id="modalCancel">キャンセル</button>
+       <button type="button" class="btn btn-primary" id="modalSave">保存</button>`
+    );
+    $("#modalCancel").onclick = closeModal;
+    $("#igId")?.addEventListener("input", () => updateIgDupHint(item?.id));
+    updateIgDupHint(item?.id);
+    if (item) {
+      $("#modalDelete").onclick = () => {
+        const copy = { ...item };
+        closeModal();
+        softDelete("igList", copy, `@${copy.instagramId}`, () => {
+          data.igList = data.igList.filter((x) => x.id !== id);
+        });
+      };
+    }
+    $("#modalSave").onclick = () => {
+      const raw = $("#igId").value.trim().replace(/^@+/, "");
+      const norm = normalizeIgId(raw);
+      if (!norm) return toast("Instagram IDを入力してください");
+      const dup = findIgDuplicate(norm, item?.id);
+      if (dup) return toast(`@${dup.instagramId} はすでに登録済みです`);
+      const now = new Date().toISOString();
+      const payload = {
+        id: item?.id || uid(),
+        instagramId: raw,
+        name: $("#igName").value.trim(),
+        memo: $("#igMemo").value.trim(),
+        createdAt: item?.createdAt || now,
+        updatedAt: now,
+      };
+      if (item) {
+        const idx = data.igList.findIndex((x) => x.id === id);
+        data.igList[idx] = { ...item, ...payload };
+      } else data.igList.unshift(payload);
+      closeModal();
+      saveData();
+      toast(item ? "更新しました" : "登録しました");
+    };
+  }
+
   /* ── Render: Tasks ── */
   function renderTasks() {
     const all = getActiveTasks();
@@ -2419,6 +2570,7 @@
     renderRecords();
     renderSales();
     renderClients();
+    renderIgList();
     renderTasks();
     renderNotes();
     renderSettings();
@@ -2511,6 +2663,11 @@
     $("#editRoadmapIntroBtn")?.addEventListener("click", openRoadmapIntroModal);
     $("#addSnsLogBtn")?.addEventListener("click", () => openSnsLogModal(null));
     $("#addClientBtn").addEventListener("click", () => openClientModal());
+    $("#addIgBtn")?.addEventListener("click", () => openIgListModal());
+    $("#igSearch")?.addEventListener("input", (e) => {
+      igSearchQuery = e.target.value || "";
+      renderIgList();
+    });
     $("#addTaskBtn").addEventListener("click", () => openTaskModal());
     $("#addNoteBtn").addEventListener("click", () => openNoteModal());
     $("#emptyTrashBtn")?.addEventListener("click", emptyTrash);

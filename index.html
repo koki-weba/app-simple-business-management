@@ -14,7 +14,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=DM+Sans:ital,opsz,wght@0,9..40,400;0,9..40,500;0,9..40,600;0,9..40,700;1,9..40,400&family=Noto+Sans+JP:wght@400;500;600;700&display=swap" rel="stylesheet" />
-  <link rel="stylesheet" href="styles.css?v=15" />
+  <link rel="stylesheet" href="styles.css?v=16" />
   <title>起業ロードマップ | Startup Roadmap</title>
 </head>
 <body>
@@ -245,6 +245,22 @@
         <div id="clientList" class="client-list"></div>
       </section>
 
+      <!-- IG LIST -->
+      <section class="view view-list" data-view="list">
+        <div class="card animate-in">
+          <div class="card-head">
+            <h3>Instagramリスト</h3>
+            <button type="button" class="btn btn-primary btn-sm" id="addIgBtn">+ 追加</button>
+          </div>
+          <div class="client-summary" id="igSummary"></div>
+          <label class="field ig-search-field">
+            <span>ID検索</span>
+            <input type="search" id="igSearch" class="input" placeholder="@なしで入力可・部分一致" autocomplete="off" />
+          </label>
+        </div>
+        <div id="igList" class="client-list"></div>
+      </section>
+
       <!-- TASKS -->
       <section class="view view-tasks" data-view="tasks">
         <div class="card animate-in">
@@ -379,7 +395,7 @@
           <p>スマホで「ホーム画面に追加」するとアプリのように使えます。</p>
           <button type="button" class="btn btn-primary btn-block" id="installBtn">インストール</button>
         </div>
-        <p class="version-tag">起業ロードマップ v15</p>
+        <p class="version-tag">起業ロードマップ v16</p>
       </section>
     </main>
 
@@ -403,6 +419,10 @@
       <button type="button" class="nav-btn" data-nav="clients">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75"/></svg>
         <span>案件</span>
+      </button>
+      <button type="button" class="nav-btn" data-nav="list">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M8 6h13M8 12h13M8 18h13"/><path d="M3 6h.01M3 12h.01M3 18h.01"/></svg>
+        <span>リスト</span>
       </button>
       <button type="button" class="nav-btn" data-nav="tasks">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg>
@@ -436,9 +456,9 @@
   <script src="https://www.gstatic.com/firebasejs/10.14.0/firebase-app-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.14.0/firebase-firestore-compat.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
-  <script src="firebase-config.js?v=15"></script>
-  <script src="sync.js?v=15"></script>
-  <script src="defaults.js?v=15"></script>
-  <script src="app.js?v=15"></script>
+  <script src="firebase-config.js?v=16"></script>
+  <script src="sync.js?v=16"></script>
+  <script src="defaults.js?v=16"></script>
+  <script src="app.js?v=16"></script>
 </body>
 </html>

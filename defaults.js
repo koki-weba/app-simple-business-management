@@ -2,7 +2,7 @@
 (() => {
   "use strict";
 
-  const SCHEMA_VERSION = 4;
+  const SCHEMA_VERSION = 5;
   const STORAGE_KEY = "startupRoadmap_userData_v3";
   const META_KEY = "startupRoadmap_meta_v3";
 
@@ -429,6 +429,7 @@
       milestones: milestoneState,
       monthlyRecords: [],
       clients: [],
+      igList: [],
       salesLogs: [],
       tasks: QUICK_TASKS.map((t) => ({
         id: t.id,
@@ -535,6 +536,7 @@
 
     out.monthlyRecords = Array.isArray(saved.monthlyRecords) ? saved.monthlyRecords : [];
     out.clients = Array.isArray(saved.clients) ? saved.clients : [];
+    out.igList = Array.isArray(saved.igList) ? saved.igList : [];
     out.salesLogs = Array.isArray(saved.salesLogs) ? saved.salesLogs : [];
     out.snsLogs = Array.isArray(saved.snsLogs) ? saved.snsLogs.map(normalizeSnsLog) : [];
     out.customTasks = Array.isArray(saved.customTasks) ? saved.customTasks : [];
