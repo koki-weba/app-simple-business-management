@@ -4,7 +4,7 @@
 
   const D = window.StartupDefaults;
   const STORAGE_KEY = D.STORAGE_KEY;
-  const APP_VERSION = 18;
+  const APP_VERSION = 19;
   const CIRC = 326.7;
 
   const PAGE_META = {
@@ -149,12 +149,47 @@
       (d.customTasks?.length || 0) +
       (d.notes?.length || 0) +
       (d.snsLogs?.length || 0) +
-      (d.journal?.length || 0)
+      (d.journal?.length || 0) +
+      (d.tasks?.filter?.((t) => t.done)?.length || 0)
     );
   }
 
   function isEffectivelyEmpty(d) {
     return contentSignal(d) === 0;
+  }
+
+  /** 初回取り込み・データ量差が大きいときは中身の多い方を優先（スマホ→PC想定） */
+  function decideApplyRemote(remoteDoc, opts = {}) {
+    const remotePayload = remoteDoc?.payload;
+    if (!remotePayload) return false;
+    const forceRemote = !!opts.forceRemote;
+    const localSig = contentSignal(data);
+    const remoteSig = contentSignal(remotePayload);
+    const localMs = localUpdatedMs();
+    const remoteMs = remoteUpdatedMs(remoteDoc);
+    const remoteRev = Number(remoteDoc.revision || remotePayload._meta?.revision) || 0;
+    const localRev = Number(data._meta?.revision) || 0;
+
+    if (forceRemote) {
+      if (remoteSig > 0) return true;
+      if (localSig > 0) return false;
+      return remoteMs >= localMs;
+    }
+    if (localSig === 0 && remoteSig > 0) return true;
+    if (remoteSig === 0 && localSig > 0) return false;
+    if (remoteSig > localSig + 1) return true;
+    if (localSig > remoteSig + 1) return false;
+    if (remoteMs > localMs) return true;
+    if (remoteMs === localMs && remoteRev > localRev) return true;
+    return false;
+  }
+
+  function decidePushLocal(remoteDoc, opts = {}) {
+    if (!remoteDoc?.payload) return true;
+    if (opts.forceRemote) {
+      return contentSignal(remoteDoc.payload) === 0 && contentSignal(data) > 0;
+    }
+    return !decideApplyRemote(remoteDoc, opts);
   }
 
   function rememberSyncId(id) {
@@ -180,6 +215,7 @@
       cloudPushPaused ||
       !data.sync?.enabled ||
       data.sync?.autoOptOut === true ||
+      data.sync?.preferRemoteOnce ||
       !window.CloudSync?.isConfigured?.()
     ) {
       return;
@@ -198,22 +234,12 @@
     if (render) renderAll();
   }
 
-  async function applyRemoteCloud(remoteDoc, silent) {
+  async function applyRemoteCloud(remoteDoc, silent, opts = {}) {
     if (!remoteDoc?.payload) return false;
     const remotePayload = remoteDoc.payload;
-    const localMs = localUpdatedMs();
     const remoteMs = remoteUpdatedMs(remoteDoc);
-    const localEmpty = isEffectivelyEmpty(data);
-    const remoteEmpty = isEffectivelyEmpty(remotePayload);
     const remoteRev = Number(remoteDoc.revision || remotePayload._meta?.revision) || 0;
-    const localRev = Number(data._meta?.revision) || 0;
-
-    let shouldApply = false;
-    if (localEmpty && !remoteEmpty) shouldApply = true;
-    else if (!localEmpty && remoteEmpty) shouldApply = false;
-    else if (remoteMs > localMs) shouldApply = true;
-    else if (remoteMs === localMs && remoteRev > localRev) shouldApply = true;
-    if (!shouldApply) return false;
+    if (!decideApplyRemote(remoteDoc, opts)) return false;
 
     CloudSync.setApplyingRemote(true);
     try {
@@ -225,9 +251,11 @@
         enabled: prevSync.enabled !== false,
         syncId: prevSync.syncId || remotePayload.sync?.syncId || currentSyncId(),
         autoOptOut: prevSync.autoOptOut,
+        preferRemoteOnce: false,
+        pairAcknowledged: true,
         lastSyncAt: new Date().toISOString(),
         lastSyncStatus: "ok",
-        lastSyncMessage: "他端末から取り込み",
+        lastSyncMessage: opts.forceRemote ? "スマホ等のデータを取り込み" : "他端末から取り込み",
       };
       ensureMeta();
       data._meta.updatedAt = remotePayload._meta?.updatedAt || data._meta.updatedAt;
@@ -238,8 +266,9 @@
       cloudPushPaused = true;
       persistLocalOnly();
       cloudPushPaused = false;
-      if (!silent) toast("他の端末の内容を反映しました");
-      if (!data.sync.pairAcknowledged) data.sync.pairAcknowledged = true;
+      if (!silent) {
+        toast(opts.forceRemote ? "クラウドの内容をこの端末に反映しました" : "他の端末の内容を反映しました");
+      }
       renderAll();
       return true;
     } finally {
@@ -255,6 +284,8 @@
       if (!data.sync) data.sync = {};
       data.sync.enabled = true;
       data.sync.autoOptOut = false;
+      // 共有リンクで接続 = 相手（通常はスマホ）のクラウドを正として取り込む
+      data.sync.preferRemoteOnce = true;
       rememberSyncId(pair);
       data.sync.pairedAt = new Date().toISOString();
       data.sync.pairAcknowledged = true;
@@ -263,7 +294,7 @@
       const qs = url.searchParams.toString();
       window.history.replaceState({}, "", url.pathname + (qs ? "?" + qs : "") + url.hash);
       persistLocalOnly();
-      toast("他の端末と接続しました。以降は自動同期されます");
+      toast("接続しました。クラウドのデータを取り込みます…");
       return true;
     } catch {
       return false;
@@ -279,6 +310,7 @@
     data.sync.enabled = true;
     data.sync.autoOptOut = false;
 
+    const forceRemote = !!data.sync.preferRemoteOnce;
     data.sync.lastSyncStatus = "syncing";
     renderSyncSettings();
     try {
@@ -288,24 +320,38 @@
       if (!remote) {
         const newId = await CloudSync.push(syncId || "", JSON.parse(JSON.stringify(data)));
         rememberSyncId(newId);
-        data.sync.lastSyncMessage = syncId ? "クラウドへ保存" : "クラウド部屋を作成";
-        if (showToast) toast("この端末のデータをクラウドに保存しました");
+        data.sync.preferRemoteOnce = false;
+        data.sync.lastSyncMessage = syncId ? "クラウドへ保存" : "この端末を親としてクラウド作成";
+        if (showToast) {
+          toast("この端末のデータをクラウドに保存しました。共有リンクをPCで開いてください");
+        }
       } else {
-        const applied = await applyRemoteCloud(remote, true);
+        const applied = await applyRemoteCloud(remote, !showToast, { forceRemote });
+        if (forceRemote) data.sync.preferRemoteOnce = false;
         if (!applied) {
-          const localMs = localUpdatedMs();
-          const remoteMs = remoteUpdatedMs(remote);
-          if (localMs > remoteMs || (isEffectivelyEmpty(remote.payload) && !isEffectivelyEmpty(data))) {
+          if (decidePushLocal(remote, { forceRemote })) {
             const newId = await CloudSync.push(syncId, JSON.parse(JSON.stringify(data)));
             rememberSyncId(newId || syncId);
             data.sync.lastSyncMessage = "この端末が最新のため送信";
             if (showToast) toast("この端末の内容をクラウドへ送りました");
           } else {
-            data.sync.lastSyncMessage = "すでに最新";
-            if (showToast) toast("すでに最新です");
+            data.sync.lastSyncMessage = forceRemote
+              ? "クラウドに取り込むデータがありません"
+              : "すでに最新";
+            if (showToast) {
+              toast(
+                forceRemote
+                  ? "クラウド側にデータがまだありません。スマホで先に同期してください"
+                  : "すでに最新です"
+              );
+            }
           }
         } else if (showToast) {
-          toast("クラウドから同期しました");
+          toast(
+            forceRemote
+              ? "スマホ等のデータをPCに反映しました。以降は自動同期されます"
+              : "クラウドから同期しました"
+          );
         }
       }
       data.sync.lastSyncAt = new Date().toISOString();
@@ -322,6 +368,21 @@
     }
     renderSyncSettings();
     renderSyncBanner();
+  }
+
+  async function pullCloudOverwriteLocal() {
+    if (
+      !confirm(
+        "クラウドの内容でこの端末を上書きしますか？\n（スマホに溜まったデータをPCへ取り込むときに使います）"
+      )
+    ) {
+      return;
+    }
+    data.sync.preferRemoteOnce = true;
+    data.sync.enabled = true;
+    data.sync.autoOptOut = false;
+    persistLocalOnly();
+    await syncPullNow(true);
   }
 
   function updatePairQr() {
@@ -361,7 +422,7 @@
     } else {
       if (msg)
         msg.textContent =
-          "PCとスマホをつなぐには、設定で「共有リンクをコピー」してもう一方の端末で開いてください（初回のみ）。";
+          "スマホのデータをPCへ取り込むには、スマホで共有リンクをコピーし、PCで開いてください（初回のみ）。";
     }
   }
 
@@ -394,7 +455,7 @@
     const hint = $("#syncAutoHint");
     if (hint) {
       hint.innerHTML =
-        "<strong>最初に一度だけ</strong>、下の共有リンクをもう一方の端末で開いてください。以降は保存のたびに自動同期されます（週次SNS・営業記録も含みます）。";
+        "<strong>手順:</strong> ①データがある<strong>スマホ</strong>で「共有リンクをコピー」②<strong>PC</strong>でそのリンクを開く → スマホのデータがPCに入り、以降は自動同期されます。";
     }
     updatePairQr();
     renderSyncBanner();
@@ -439,7 +500,7 @@
       await navigator.clipboard?.writeText(link);
       data.sync.pairAcknowledged = true;
       persistLocalOnly();
-      toast("共有リンクをコピーしました。他端末で開いてください");
+      toast("共有リンクをコピーしました。PCで開くとスマホのデータが取り込まれます");
       renderSyncSettings();
     } catch {
       toast("コピーに失敗しました");
@@ -2922,6 +2983,7 @@
     $("#syncEnabled")?.addEventListener("change", saveSyncSettings);
     $("#saveSyncBtn")?.addEventListener("click", saveSyncSettings);
     $("#syncNowBtn")?.addEventListener("click", () => syncPullNow(true));
+    $("#pullCloudOverwriteBtn")?.addEventListener("click", () => pullCloudOverwriteLocal());
     $("#copySyncIdBtn")?.addEventListener("click", copySyncId);
     $("#copyPairLinkBtn")?.addEventListener("click", copyPairLink);
     $("#openSyncSettingsBtn")?.addEventListener("click", () => switchView("settings"));
@@ -2930,6 +2992,8 @@
       const v = ($("#syncIdInput")?.value || "").trim();
       if (v) {
         rememberSyncId(v);
+        data.sync.preferRemoteOnce = true;
+        data.sync.pairAcknowledged = true;
         persistLocalOnly();
         syncPullNow(true);
       }

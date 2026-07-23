@@ -462,6 +462,7 @@
         syncId: "",
         pairAcknowledged: false,
         pairedAt: null,
+        preferRemoteOnce: false,
         lastSyncAt: null,
         lastSyncStatus: "idle",
         lastSyncMessage: "",
