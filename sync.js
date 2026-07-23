@@ -1,13 +1,13 @@
-/* クラウド同期 — JSONBlob（ログイン不要） / Firebase（任意）
- * 同じ同期IDを両端末で共有すれば、snsLogs を含む全データが同期されます。
+/* クラウド同期 — Puter（無料・クライアント発行の同期ID）/ Firebase（任意）
+ * JSONBlob は 429 制限があるため使わない。
+ * 同じ同期ID + 同じ Puter アカウントで、snsLogs を含む全データを共有する。
  */
 window.CloudSync = (() => {
   "use strict";
 
   const DEVICE_KEY = "startupRoadmap_deviceId";
   const SYNC_ID_KEY = "startupRoadmap_syncId_v1";
-  const JSONBLOB_BASE = "https://jsonblob.com/api/jsonBlob";
-  const POLL_MS = 3500;
+  const POLL_MS = 4000;
 
   let db = null;
   let unsubscribe = null;
@@ -17,19 +17,29 @@ window.CloudSync = (() => {
   let applyingRemote = false;
   let lastSeenRemoteMs = 0;
   let providerName = null;
+  let pushInFlight = null;
 
   function isFirebaseConfigured() {
     const c = window.FirebaseConfig;
     return !!(c && c.enabled && c.projectId && c.apiKey && typeof firebase !== "undefined");
   }
 
+  function isPuterReady() {
+    return typeof puter !== "undefined" && !!(puter && puter.kv);
+  }
+
   function isConfigured() {
-    return true; // JSONBlob は常に利用可（ネット必須）
+    return isFirebaseConfigured() || isPuterReady() || typeof puter !== "undefined";
   }
 
   function getProvider() {
     if (isFirebaseConfigured()) return "firebase";
-    return "jsonblob";
+    if (isPuterReady()) return "puter";
+    return null;
+  }
+
+  function kvKey(syncId) {
+    return "sr_cloud_v1_" + syncId;
   }
 
   function getDeviceId() {
@@ -44,7 +54,7 @@ window.CloudSync = (() => {
   function generateSyncId() {
     const chars = "abcdefghijklmnopqrstuvwxyz0123456789";
     let s = "";
-    for (let i = 0; i < 16; i++) s += chars[Math.floor(Math.random() * chars.length)];
+    for (let i = 0; i < 20; i++) s += chars[Math.floor(Math.random() * chars.length)];
     return s;
   }
 
@@ -63,6 +73,15 @@ window.CloudSync = (() => {
     } catch (_) {}
   }
 
+  function ensureSyncId(syncId) {
+    let id = (syncId || loadStoredSyncId() || "").trim();
+    if (!id) {
+      id = generateSyncId();
+      storeSyncId(id);
+    }
+    return id;
+  }
+
   function setMergeHandler(fn) {
     mergeHandler = fn;
   }
@@ -74,10 +93,13 @@ window.CloudSync = (() => {
   function slimPayload(payload) {
     if (!payload || typeof payload !== "object") return payload;
     const copy = JSON.parse(JSON.stringify(payload));
-    const raw = JSON.stringify(copy);
-    if (raw.length < 900000) return copy;
+    let raw = JSON.stringify(copy);
+    if (raw.length < 320000) return copy;
     copy.trash = [];
     copy.archives = (copy.archives || []).slice(0, 2);
+    raw = JSON.stringify(copy);
+    if (raw.length < 320000) return copy;
+    copy.journal = (copy.journal || []).slice(-30);
     return copy;
   }
 
@@ -96,44 +118,35 @@ window.CloudSync = (() => {
     };
   }
 
-  function extractBlobId(res) {
-    let fromHeader =
-      res.headers.get("X-jsonblob") ||
-      res.headers.get("x-jsonblob") ||
-      res.headers.get("Location") ||
-      res.headers.get("location") ||
-      "";
-    if (!fromHeader) {
-      res.headers.forEach((value, key) => {
-        const k = String(key).toLowerCase();
-        if (k === "x-jsonblob" || k === "location") fromHeader = value;
-      });
+  function sleep(ms) {
+    return new Promise((r) => setTimeout(r, ms));
+  }
+
+  async function waitForPuter(timeoutMs = 12000) {
+    const start = Date.now();
+    while (Date.now() - start < timeoutMs) {
+      if (isPuterReady()) return true;
+      await sleep(150);
     }
-    if (fromHeader) {
-      const parts = String(fromHeader).replace(/\/$/, "").split("/");
-      return parts[parts.length - 1];
-    }
-    if (res.url && res.url.includes("/jsonBlob/")) {
-      const parts = res.url.replace(/\/$/, "").split("/");
-      return parts[parts.length - 1];
-    }
-    return "";
+    return isPuterReady();
   }
 
   async function init() {
-    providerName = getProvider();
-    if (providerName === "firebase") {
+    if (isFirebaseConfigured()) {
       try {
         if (!firebase.apps.length) {
           firebase.initializeApp(window.FirebaseConfig);
         }
         db = firebase.firestore();
+        providerName = "firebase";
         return true;
       } catch (e) {
         console.error("CloudSync Firebase init failed", e);
-        providerName = "jsonblob";
       }
     }
+    const ok = await waitForPuter();
+    providerName = ok ? "puter" : null;
+    if (!ok) throw new Error("同期サービスを読み込めませんでした。ネット接続のあと再読み込みしてください");
     return true;
   }
 
@@ -156,79 +169,73 @@ window.CloudSync = (() => {
     return syncId;
   }
 
-  async function pullJsonblob(syncId) {
-    if (!syncId) return null;
-    const res = await fetch(`${JSONBLOB_BASE}/${encodeURIComponent(syncId)}`, {
-      method: "GET",
-      headers: { Accept: "application/json" },
-      cache: "no-store",
-    });
-    if (res.status === 404) return null;
-    if (!res.ok) throw new Error("クラウド取得に失敗 (" + res.status + ")");
-    const data = await res.json();
+  function normalizeRemote(raw) {
+    if (raw == null || raw === "") return null;
+    let data = raw;
+    if (typeof raw === "string") {
+      try {
+        data = JSON.parse(raw);
+      } catch {
+        return null;
+      }
+    }
     if (data && data.payload) return data;
-    // 古い形式や素のペイロードも許容
     if (data && data.schemaVersion != null) {
       return { payload: data, updatedAtMs: Date.now(), deviceId: "", revision: 0 };
     }
     return data;
   }
 
-  async function pushJsonblob(syncId, payload) {
+  async function pullPuter(syncId) {
+    if (!syncId) return null;
+    if (!isPuterReady()) await waitForPuter();
+    if (!isPuterReady()) throw new Error("クラウド未接続（ログインが必要な場合があります）");
+    const raw = await puter.kv.get(kvKey(syncId));
+    return normalizeRemote(raw);
+  }
+
+  async function pushPuter(syncId, payload) {
+    const id = ensureSyncId(syncId);
+    if (!isPuterReady()) await waitForPuter();
+    if (!isPuterReady()) throw new Error("クラウド未接続（ログインが必要な場合があります）");
     const doc = wrapDoc(payload);
-    const body = JSON.stringify(doc);
-
-    if (syncId) {
-      const res = await fetch(`${JSONBLOB_BASE}/${encodeURIComponent(syncId)}`, {
-        method: "PUT",
-        headers: {
-          "Content-Type": "application/json",
-          Accept: "application/json",
-        },
-        body,
-      });
-      if (res.ok) {
-        lastSeenRemoteMs = doc.updatedAtMs;
-        return syncId;
-      }
-      if (res.status !== 404) {
-        throw new Error("クラウド送信に失敗 (" + res.status + ")");
-      }
-      // 404 → 新規作成へ
-    }
-
-    const res = await fetch(JSONBLOB_BASE, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        Accept: "application/json",
-      },
-      body,
-    });
-    if (!res.ok) throw new Error("クラウド作成に失敗 (" + res.status + ")");
-    const newId = extractBlobId(res);
-    if (!newId) throw new Error("同期IDを取得できませんでした（CORS）");
-    storeSyncId(newId);
+    // Puter 初回はログイン画面が出ることがあります（無料・両端末で同じアカウント）
+    await puter.kv.set(kvKey(id), doc);
+    storeSyncId(id);
     lastSeenRemoteMs = doc.updatedAtMs;
-    return newId;
+    return id;
   }
 
   async function pull(syncId) {
     const id = syncId || loadStoredSyncId();
+    if (!id) return null;
     if (providerName === "firebase") return pullFirebase(id);
-    return pullJsonblob(id);
+    return pullPuter(id);
   }
 
   async function push(syncId, payload) {
-    const id = syncId || loadStoredSyncId();
-    if (providerName === "firebase") {
-      const out = await pushFirebase(id, payload);
+    if (pushInFlight) {
+      try {
+        await pushInFlight;
+      } catch (_) {}
+    }
+    const run = (async () => {
+      const id = ensureSyncId(syncId);
+      if (providerName === "firebase") {
+        const out = await pushFirebase(id, payload);
+        if (out) storeSyncId(out);
+        return out;
+      }
+      const out = await pushPuter(id, payload);
       if (out) storeSyncId(out);
       return out;
+    })();
+    pushInFlight = run;
+    try {
+      return await run;
+    } finally {
+      if (pushInFlight === run) pushInFlight = null;
     }
-    const out = await pushJsonblob(id, payload);
-    if (out) storeSyncId(out);
-    return out;
   }
 
   function schedulePush(syncId, getPayload) {
@@ -261,8 +268,9 @@ window.CloudSync = (() => {
   function startWatch(syncId) {
     stopWatch();
     const id = syncId || loadStoredSyncId();
+    if (!id) return;
     if (providerName === "firebase") {
-      if (!db || !id) return;
+      if (!db) return;
       unsubscribe = docRef(id).onSnapshot(
         (snap) => {
           if (!snap.exists) return;
@@ -272,11 +280,10 @@ window.CloudSync = (() => {
       );
       return;
     }
-    if (!id) return;
     const tick = async () => {
       if (applyingRemote || document.visibilityState === "hidden") return;
       try {
-        const remote = await pullJsonblob(id);
+        const remote = await pullPuter(id);
         if (remote) emitRemote(remote);
       } catch (e) {
         console.error("CloudSync poll error", e);
@@ -300,20 +307,23 @@ window.CloudSync = (() => {
   function getStatusLabel() {
     const p = providerName || getProvider();
     if (p === "firebase") return "Firebase";
-    if (p === "jsonblob") return "クラウド同期";
+    if (p === "puter") return "無料クラウド";
     return "未接続";
   }
 
   return {
     isConfigured,
     isFirebaseConfigured,
+    isPuterReady,
     getProvider,
     getProviderName: () => providerName || getProvider(),
     getStatusLabel,
     getDeviceId,
     generateSyncId,
+    ensureSyncId,
     loadStoredSyncId,
     storeSyncId,
+    waitForPuter,
     init,
     pull,
     push,

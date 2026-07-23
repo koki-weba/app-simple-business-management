@@ -4,7 +4,7 @@
 
   const D = window.StartupDefaults;
   const STORAGE_KEY = D.STORAGE_KEY;
-  const APP_VERSION = 19;
+  const APP_VERSION = 20;
   const CIRC = 326.7;
 
   const PAGE_META = {
@@ -316,14 +316,18 @@
     try {
       await CloudSync.init();
       let syncId = currentSyncId();
-      const remote = syncId ? await CloudSync.pull(syncId) : null;
+      if (!syncId) {
+        syncId = CloudSync.ensureSyncId?.() || CloudSync.generateSyncId();
+        rememberSyncId(syncId);
+      }
+      const remote = await CloudSync.pull(syncId);
       if (!remote) {
-        const newId = await CloudSync.push(syncId || "", JSON.parse(JSON.stringify(data)));
-        rememberSyncId(newId);
+        const newId = await CloudSync.push(syncId, JSON.parse(JSON.stringify(data)));
+        rememberSyncId(newId || syncId);
         data.sync.preferRemoteOnce = false;
-        data.sync.lastSyncMessage = syncId ? "クラウドへ保存" : "この端末を親としてクラウド作成";
+        data.sync.lastSyncMessage = "この端末を親としてクラウド保存";
         if (showToast) {
-          toast("この端末のデータをクラウドに保存しました。共有リンクをPCで開いてください");
+          toast("スマホのデータをクラウドに保存しました。共有リンクをPCで開いてください");
         }
       } else {
         const applied = await applyRemoteCloud(remote, !showToast, { forceRemote });
@@ -364,7 +368,7 @@
     } catch (e) {
       data.sync.lastSyncStatus = "error";
       data.sync.lastSyncMessage = e.message || "同期エラー";
-      if (showToast) toast("同期に失敗しました。ネット接続を確認してください");
+      if (showToast) toast("同期に失敗しました。初回はログイン画面が出ることがあります（両端末で同じ無料アカウント）");
     }
     renderSyncSettings();
     renderSyncBanner();
@@ -422,7 +426,7 @@
     } else {
       if (msg)
         msg.textContent =
-          "スマホのデータをPCへ取り込むには、スマホで共有リンクをコピーし、PCで開いてください（初回のみ）。";
+          "スマホで共有リンクをコピーし、PCで同じ無料アカウントにログインしてリンクを開いてください。";
     }
   }
 
@@ -455,7 +459,7 @@
     const hint = $("#syncAutoHint");
     if (hint) {
       hint.innerHTML =
-        "<strong>手順:</strong> ①データがある<strong>スマホ</strong>で「共有リンクをコピー」②<strong>PC</strong>でそのリンクを開く → スマホのデータがPCに入り、以降は自動同期されます。";
+        "<strong>手順:</strong> ①<strong>スマホ</strong>で「共有リンクをコピー」（初回は無料ログイン）②<strong>PC</strong>でも同じアカウントでログインし、リンクを開く → スマホのデータが入り、以降は自動同期。";
     }
     updatePairQr();
     renderSyncBanner();
@@ -491,19 +495,21 @@
   async function copyPairLink() {
     try {
       if (!currentSyncId()) {
-        toast("共有リンクを準備しています…");
-        await syncPullNow(false);
+        rememberSyncId(CloudSync.ensureSyncId?.() || CloudSync.generateSyncId());
+        persistLocalOnly();
       }
+      toast("クラウドへ保存してリンクを準備しています…");
+      await syncPullNow(false);
       const id = currentSyncId();
-      if (!id) return toast("同期IDを作れませんでした。ネット接続を確認してください");
+      if (!id) return toast("同期IDを作れませんでした。ネット接続とログインを確認してください");
       const link = pairUrlFor(id);
       await navigator.clipboard?.writeText(link);
       data.sync.pairAcknowledged = true;
       persistLocalOnly();
-      toast("共有リンクをコピーしました。PCで開くとスマホのデータが取り込まれます");
+      toast("共有リンクをコピーしました。PCで開き、同じ無料アカウントでログインしてください");
       renderSyncSettings();
-    } catch {
-      toast("コピーに失敗しました");
+    } catch (e) {
+      toast(e?.message || "コピーに失敗しました");
     }
   }
 
@@ -547,8 +553,21 @@
       return;
     }
     data.sync.enabled = true;
-    await CloudSync.init();
-    await syncPullNow(false);
+    try {
+      await CloudSync.waitForPuter?.(10000);
+      await CloudSync.init();
+      // 既に同期IDがある／ペアリング直後だけ自動接続。未設定ならユーザーが共有リンク操作するまでクラウド作成しない
+      if (currentSyncId() || data.sync.preferRemoteOnce) {
+        await syncPullNow(false);
+      } else {
+        renderSyncSettings();
+      }
+    } catch (e) {
+      if (!data.sync) data.sync = {};
+      data.sync.lastSyncStatus = "error";
+      data.sync.lastSyncMessage = e.message || "同期初期化エラー";
+      renderSyncSettings();
+    }
   }
 
   /* ── 可逆性: ゴミ箱・アーカイブ・マージ ── */
