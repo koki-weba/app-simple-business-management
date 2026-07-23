@@ -1,5 +1,5 @@
 /* Service Worker — ネットワーク優先 + version.json は常にサーバーから取得 */
-const CACHE = "startup-roadmap-v15";
+const CACHE = "startup-roadmap-v17";
 const SHELL = [
   "./index.html",
   "./styles.css",

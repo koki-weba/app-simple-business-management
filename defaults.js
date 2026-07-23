@@ -457,13 +457,14 @@
       monthTaskChecks: {},
       snsLogs: [],
       sync: {
-        enabled: false,
+        enabled: true,
+        autoOptOut: false,
         syncId: "",
         lastSyncAt: null,
         lastSyncStatus: "idle",
         lastSyncMessage: "",
       },
-      _meta: { deviceId: "", updatedAt: null },
+      _meta: { deviceId: "", updatedAt: null, updatedAtMs: 0, revision: 0 },
     };
   }
 

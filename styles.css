@@ -1634,6 +1634,11 @@ textarea.input { min-height: 80px; resize: vertical; }
 .sync-status.sync-ok { color: var(--success); background: #f0fdf4; }
 .sync-status.sync-error { color: var(--danger); background: #fef2f2; }
 .sync-status.sync-warn { color: #b45309; background: #fffbeb; }
+#syncFirebaseExtras {
+  margin-top: 0.85rem;
+  padding-top: 0.85rem;
+  border-top: 1px solid var(--border, #e5e7eb);
+}
 
 .sync-help {
   margin-top: 12px;
