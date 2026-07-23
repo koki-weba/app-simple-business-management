@@ -131,6 +131,39 @@ window.CloudSync = (() => {
     return isPuterReady();
   }
 
+  function isSignedIn() {
+    try {
+      if (providerName === "firebase" || isFirebaseConfigured()) return true;
+      if (!isPuterReady() || !puter.auth) return false;
+      return !!puter.auth.isSignedIn();
+    } catch {
+      return false;
+    }
+  }
+
+  /** ボタン操作からのみ呼ぶ（ポップアップ制限のため） */
+  async function ensureSignedIn() {
+    if (isFirebaseConfigured() && providerName === "firebase") return true;
+    await waitForPuter();
+    if (!isPuterReady()) throw new Error("同期サービスを読み込めませんでした");
+    if (puter.auth?.isSignedIn?.()) return true;
+    if (!puter.auth?.signIn) throw new Error("ログイン機能が利用できません");
+    await puter.auth.signIn();
+    if (!puter.auth.isSignedIn()) throw new Error("ログインがキャンセルされました");
+    return true;
+  }
+
+  async function getAccountLabel() {
+    try {
+      if (!isSignedIn()) return "";
+      if (providerName === "firebase") return "Firebase";
+      const user = await puter.auth.getUser();
+      return user?.username || user?.email || "ログイン済み";
+    } catch {
+      return isSignedIn() ? "ログイン済み" : "";
+    }
+  }
+
   async function init() {
     if (isFirebaseConfigured()) {
       try {
@@ -189,7 +222,8 @@ window.CloudSync = (() => {
   async function pullPuter(syncId) {
     if (!syncId) return null;
     if (!isPuterReady()) await waitForPuter();
-    if (!isPuterReady()) throw new Error("クラウド未接続（ログインが必要な場合があります）");
+    if (!isPuterReady()) throw new Error("クラウド未接続");
+    if (!isSignedIn()) throw new Error("未ログインです。「クラウドにログイン」を押してください");
     const raw = await puter.kv.get(kvKey(syncId));
     return normalizeRemote(raw);
   }
@@ -197,9 +231,9 @@ window.CloudSync = (() => {
   async function pushPuter(syncId, payload) {
     const id = ensureSyncId(syncId);
     if (!isPuterReady()) await waitForPuter();
-    if (!isPuterReady()) throw new Error("クラウド未接続（ログインが必要な場合があります）");
+    if (!isPuterReady()) throw new Error("クラウド未接続");
+    if (!isSignedIn()) throw new Error("未ログインです。「クラウドにログイン」を押してください");
     const doc = wrapDoc(payload);
-    // Puter 初回はログイン画面が出ることがあります（無料・両端末で同じアカウント）
     await puter.kv.set(kvKey(id), doc);
     storeSyncId(id);
     lastSeenRemoteMs = doc.updatedAtMs;
@@ -241,6 +275,7 @@ window.CloudSync = (() => {
   function schedulePush(syncId, getPayload) {
     if (applyingRemote) return;
     if (!providerName) providerName = getProvider();
+    if (providerName === "puter" && !isSignedIn()) return;
     clearTimeout(pushTimer);
     pushTimer = setTimeout(async () => {
       try {
@@ -307,7 +342,7 @@ window.CloudSync = (() => {
   function getStatusLabel() {
     const p = providerName || getProvider();
     if (p === "firebase") return "Firebase";
-    if (p === "puter") return "無料クラウド";
+    if (p === "puter") return isSignedIn() ? "無料クラウド" : "未ログイン";
     return "未接続";
   }
 
@@ -315,6 +350,9 @@ window.CloudSync = (() => {
     isConfigured,
     isFirebaseConfigured,
     isPuterReady,
+    isSignedIn,
+    ensureSignedIn,
+    getAccountLabel,
     getProvider,
     getProviderName: () => providerName || getProvider(),
     getStatusLabel,

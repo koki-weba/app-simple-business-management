@@ -1654,17 +1654,19 @@ textarea.input { min-height: 80px; resize: vertical; }
   border: 1px solid var(--border, #e5e7eb);
 }
 
-.sync-pair-banner {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 10px 12px;
-  margin: 0 0 12px;
-  padding: 12px 14px;
-  border-radius: 12px;
+.sync-auth {
+  margin: 0 0 10px;
+  padding: 10px 12px;
+  border-radius: 10px;
+  font-size: 0.9rem;
+}
+.sync-auth-ok {
+  background: #f0fdf4;
+  color: var(--success, #15803d);
+}
+.sync-auth-warn {
   background: #fffbeb;
   color: #92400e;
-  border: 1px solid #fcd34d;
 }
 
 .sync-pair-banner p {

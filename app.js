@@ -4,7 +4,7 @@
 
   const D = window.StartupDefaults;
   const STORAGE_KEY = D.STORAGE_KEY;
-  const APP_VERSION = 20;
+  const APP_VERSION = 21;
   const CIRC = 326.7;
 
   const PAGE_META = {
@@ -382,11 +382,36 @@
     ) {
       return;
     }
-    data.sync.preferRemoteOnce = true;
-    data.sync.enabled = true;
-    data.sync.autoOptOut = false;
-    persistLocalOnly();
-    await syncPullNow(true);
+    try {
+      await CloudSync.init();
+      await CloudSync.ensureSignedIn();
+      data.sync.preferRemoteOnce = true;
+      data.sync.enabled = true;
+      data.sync.autoOptOut = false;
+      persistLocalOnly();
+      await syncPullNow(true);
+    } catch (e) {
+      toast(e?.message || "ログイン／取り込みに失敗しました");
+      renderSyncSettings();
+    }
+  }
+
+  async function loginAndSync() {
+    try {
+      toast("ログイン画面を開きます…");
+      await CloudSync.init();
+      await CloudSync.ensureSignedIn();
+      const name = await CloudSync.getAccountLabel?.();
+      toast(name ? `ログインしました（${name}）` : "ログインしました");
+      if (!currentSyncId() && !data.sync.preferRemoteOnce) {
+        rememberSyncId(CloudSync.ensureSyncId());
+      }
+      await syncPullNow(true);
+      renderSyncSettings();
+    } catch (e) {
+      toast(e?.message || "ログインに失敗しました。ポップアップを許可してください");
+      renderSyncSettings();
+    }
   }
 
   function updatePairQr() {
@@ -412,28 +437,72 @@
     const offline = data.sync.autoOptOut === true || data.sync.enabled === false;
     const err = data.sync.lastSyncStatus === "error";
     const hasId = !!currentSyncId();
-    const needsHint = !data.sync.pairAcknowledged;
-    if (offline || (!err && hasId && !needsHint)) {
+    const signedIn = !!CloudSync.isSignedIn?.();
+    const needsLogin = !signedIn && CloudSync.getProviderName?.() !== "firebase";
+    const needsPair = data.sync.preferRemoteOnce || (!data.sync.pairAcknowledged && hasId);
+    if (offline) {
+      el.hidden = true;
+      return;
+    }
+    if (!needsLogin && !err && !needsPair && hasId && data.sync.lastSyncStatus === "ok") {
+      el.hidden = true;
+      return;
+    }
+    if (!needsLogin && !err && hasId && data.sync.pairAcknowledged && !data.sync.preferRemoteOnce) {
       el.hidden = true;
       return;
     }
     el.hidden = false;
     const msg = $("#syncPairBannerMsg");
-    if (err) {
+    const btn = $("#openSyncSettingsBtn");
+    if (needsLogin && data.sync.preferRemoteOnce) {
+      if (msg)
+        msg.textContent =
+          "共有リンクを受け取りました。下のボタンでスマホと同じアカウントにログインするとデータを取り込みます。";
+      if (btn) btn.textContent = "ログインして取り込む";
+      btn?.setAttribute("data-sync-action", "login-pull");
+    } else if (needsLogin) {
+      if (msg)
+        msg.textContent =
+          "同期には無料クラウドへのログインが必要です（PCとスマホで同じアカウント）。";
+      if (btn) btn.textContent = "ログインする";
+      btn?.setAttribute("data-sync-action", "login");
+    } else if (err) {
       if (msg) msg.textContent = "同期エラーです。設定から状態を確認してください。";
-    } else if (!hasId) {
-      if (msg) msg.textContent = "同期の準備中です。少し待つか、設定を開いてください。";
+      if (btn) btn.textContent = "設定を開く";
+      btn?.setAttribute("data-sync-action", "settings");
+    } else if (data.sync.preferRemoteOnce) {
+      if (msg) msg.textContent = "クラウドからデータを取り込み中です…";
+      if (btn) btn.textContent = "再取り込み";
+      btn?.setAttribute("data-sync-action", "pull");
     } else {
       if (msg)
         msg.textContent =
-          "スマホで共有リンクをコピーし、PCで同じ無料アカウントにログインしてリンクを開いてください。";
+          "スマホで「共有リンクをコピー」（ログイン必須）し、PCでリンクを開いてください。";
+      if (btn) btn.textContent = "設定を開く";
+      btn?.setAttribute("data-sync-action", "settings");
     }
   }
 
-  function renderSyncSettings() {
+  async function renderSyncSettings() {
     const statusEl = $("#syncStatusText");
     if (!statusEl || !data.sync) return;
     const provider = CloudSync.getProviderName?.() || CloudSync.getProvider?.();
+    const signedIn = !!CloudSync.isSignedIn?.();
+    let account = "";
+    try {
+      account = (await CloudSync.getAccountLabel?.()) || "";
+    } catch (_) {}
+
+    const authEl = $("#syncAuthStatus");
+    if (authEl) {
+      authEl.textContent = signedIn
+        ? `ログイン中: ${account || "OK"}`
+        : "未ログイン（同期するにはログインが必要）";
+      authEl.className = "sync-auth " + (signedIn ? "sync-auth-ok" : "sync-auth-warn");
+    }
+    const loginBtn = $("#syncLoginBtn");
+    if (loginBtn) loginBtn.textContent = signedIn ? "別アカウントでログイン" : "クラウドにログイン";
 
     const labels = { idle: "待機中", pending: "送信待ち", syncing: "同期中", ok: "自動同期中", error: "エラー" };
     const via = CloudSync.getStatusLabel?.() || provider || "";
@@ -459,7 +528,7 @@
     const hint = $("#syncAutoHint");
     if (hint) {
       hint.innerHTML =
-        "<strong>手順:</strong> ①<strong>スマホ</strong>で「共有リンクをコピー」（初回は無料ログイン）②<strong>PC</strong>でも同じアカウントでログインし、リンクを開く → スマホのデータが入り、以降は自動同期。";
+        "<strong>重要:</strong> PCとスマホで<strong>同じ無料アカウント</strong>にログインしてください。①スマホで「クラウドにログイン」→「共有リンクをコピー」②PCでリンクを開き「ログインして取り込む」。";
     }
     updatePairQr();
     renderSyncBanner();
@@ -494,22 +563,26 @@
 
   async function copyPairLink() {
     try {
+      await CloudSync.init();
+      // ボタン操作からログイン（ポップアップはユーザー操作が必須）
+      await CloudSync.ensureSignedIn();
       if (!currentSyncId()) {
         rememberSyncId(CloudSync.ensureSyncId?.() || CloudSync.generateSyncId());
         persistLocalOnly();
       }
-      toast("クラウドへ保存してリンクを準備しています…");
+      toast("ログイン済み。クラウドへ保存しています…");
       await syncPullNow(false);
       const id = currentSyncId();
-      if (!id) return toast("同期IDを作れませんでした。ネット接続とログインを確認してください");
+      if (!id) return toast("同期IDを作れませんでした");
       const link = pairUrlFor(id);
       await navigator.clipboard?.writeText(link);
       data.sync.pairAcknowledged = true;
       persistLocalOnly();
-      toast("共有リンクをコピーしました。PCで開き、同じ無料アカウントでログインしてください");
+      toast("共有リンクをコピーしました。PCで開き、同じアカウントで「ログインして取り込む」を押してください");
       renderSyncSettings();
     } catch (e) {
-      toast(e?.message || "コピーに失敗しました");
+      toast(e?.message || "失敗しました。ポップアップブロックを解除してください");
+      renderSyncSettings();
     }
   }
 
@@ -556,10 +629,16 @@
     try {
       await CloudSync.waitForPuter?.(10000);
       await CloudSync.init();
-      // 既に同期IDがある／ペアリング直後だけ自動接続。未設定ならユーザーが共有リンク操作するまでクラウド作成しない
-      if (currentSyncId() || data.sync.preferRemoteOnce) {
+      // 未ログインのまま自動pushしない（端末別ゲストになるのを防ぐ）
+      if (CloudSync.isSignedIn?.() && (currentSyncId() || data.sync.preferRemoteOnce)) {
         await syncPullNow(false);
       } else {
+        if (data.sync.preferRemoteOnce || currentSyncId()) {
+          data.sync.lastSyncStatus = "idle";
+          data.sync.lastSyncMessage = CloudSync.isSignedIn?.()
+            ? "同期待ち"
+            : "ログインが必要です";
+        }
         renderSyncSettings();
       }
     } catch (e) {
@@ -2999,22 +3078,47 @@
     $("#notifBtn").addEventListener("click", showFocusAlert);
     $("#checkUpdateBtn")?.addEventListener("click", () => checkForAppUpdate(true));
     $("#forceUpdateBtn")?.addEventListener("click", forceClearCacheAndReload);
+    $("#syncLoginBtn")?.addEventListener("click", () => loginAndSync());
     $("#syncEnabled")?.addEventListener("change", saveSyncSettings);
     $("#saveSyncBtn")?.addEventListener("click", saveSyncSettings);
-    $("#syncNowBtn")?.addEventListener("click", () => syncPullNow(true));
+    $("#syncNowBtn")?.addEventListener("click", async () => {
+      try {
+        if (!CloudSync.isSignedIn?.()) await CloudSync.ensureSignedIn();
+        await syncPullNow(true);
+      } catch (e) {
+        toast(e?.message || "同期に失敗しました");
+      }
+    });
     $("#pullCloudOverwriteBtn")?.addEventListener("click", () => pullCloudOverwriteLocal());
     $("#copySyncIdBtn")?.addEventListener("click", copySyncId);
     $("#copyPairLinkBtn")?.addEventListener("click", copyPairLink);
-    $("#openSyncSettingsBtn")?.addEventListener("click", () => switchView("settings"));
+    $("#openSyncSettingsBtn")?.addEventListener("click", async () => {
+      const action = $("#openSyncSettingsBtn")?.getAttribute("data-sync-action") || "settings";
+      if (action === "login" || action === "login-pull") {
+        if (action === "login-pull") data.sync.preferRemoteOnce = true;
+        await loginAndSync();
+        return;
+      }
+      if (action === "pull") {
+        await pullCloudOverwriteLocal();
+        return;
+      }
+      switchView("settings");
+    });
     $("#newSyncIdBtn")?.addEventListener("click", () => resetSyncRoom());
-    $("#syncIdInput")?.addEventListener("change", () => {
+    $("#syncIdInput")?.addEventListener("change", async () => {
       const v = ($("#syncIdInput")?.value || "").trim();
       if (v) {
         rememberSyncId(v);
         data.sync.preferRemoteOnce = true;
         data.sync.pairAcknowledged = true;
         persistLocalOnly();
-        syncPullNow(true);
+        try {
+          if (!CloudSync.isSignedIn?.()) await CloudSync.ensureSignedIn();
+          await syncPullNow(true);
+        } catch (e) {
+          toast(e?.message || "取り込みに失敗しました");
+        }
       }
     });
 
