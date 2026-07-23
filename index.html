@@ -14,7 +14,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=DM+Sans:ital,opsz,wght@0,9..40,400;0,9..40,500;0,9..40,600;0,9..40,700;1,9..40,400&family=Noto+Sans+JP:wght@400;500;600;700&display=swap" rel="stylesheet" />
-  <link rel="stylesheet" href="styles.css?v=21" />
+  <link rel="stylesheet" href="styles.css?v=22" />
   <title>起業ロードマップ | Startup Roadmap</title>
 </head>
 <body>
@@ -330,7 +330,7 @@
         <div class="card animate-in">
           <h3>アプリの更新</h3>
           <p class="muted small">「最新版を確認」はサーバー上のバージョンと照合します。反映されない場合は「キャッシュを消去」を押してください（データは残ります）。</p>
-          <p class="version-line">この端末: <strong id="appVersionLabel">v21</strong>　／　サーバー: <strong id="serverVersionLabel">未確認</strong></p>
+          <p class="version-line">この端末: <strong id="appVersionLabel">v22</strong>　／　サーバー: <strong id="serverVersionLabel">未確認</strong></p>
           <div class="btn-row">
             <button type="button" class="btn btn-primary" id="checkUpdateBtn">最新版を確認</button>
             <button type="button" class="btn btn-ghost" id="forceUpdateBtn">キャッシュを消去</button>
@@ -339,11 +339,12 @@
         <div class="card animate-in">
           <h3>自動同期（スマホ・PC）</h3>
           <p class="muted small" id="syncAutoHint">
-            <strong>重要:</strong> PCとスマホで<strong>同じ無料アカウント</strong>にログインしてください。①スマホで「クラウドにログイン」→「共有リンクをコピー」②PCでリンクを開き「ログインして取り込む」。
+            <strong>アカウント名が違うと同期できません。</strong>①データがあるスマホのアカウント名を控える ②PCでログアウトし、スマホと同じアカウントでログイン ③共有リンクで取り込む。
           </p>
           <p class="sync-auth sync-auth-warn" id="syncAuthStatus">未ログイン（同期するにはログインが必要）</p>
           <div class="btn-row">
             <button type="button" class="btn btn-primary" id="syncLoginBtn">クラウドにログイン</button>
+            <button type="button" class="btn btn-ghost" id="syncLogoutBtn" hidden>ログアウト</button>
           </div>
           <label class="sync-toggle">
             <input type="checkbox" id="syncEnabled" checked />
@@ -412,7 +413,7 @@
           <p>スマホで「ホーム画面に追加」するとアプリのように使えます。</p>
           <button type="button" class="btn btn-primary btn-block" id="installBtn">インストール</button>
         </div>
-        <p class="version-tag">起業ロードマップ v21</p>
+        <p class="version-tag">起業ロードマップ v22</p>
       </section>
     </main>
 
@@ -474,9 +475,9 @@
   <script src="https://www.gstatic.com/firebasejs/10.14.0/firebase-app-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.14.0/firebase-firestore-compat.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
-  <script src="firebase-config.js?v=21"></script>
-  <script src="sync.js?v=21"></script>
-  <script src="defaults.js?v=21"></script>
-  <script src="app.js?v=21"></script>
+  <script src="firebase-config.js?v=22"></script>
+  <script src="sync.js?v=22"></script>
+  <script src="defaults.js?v=22"></script>
+  <script src="app.js?v=22"></script>
 </body>
 </html>

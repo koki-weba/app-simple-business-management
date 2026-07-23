@@ -4,7 +4,7 @@
 
   const D = window.StartupDefaults;
   const STORAGE_KEY = D.STORAGE_KEY;
-  const APP_VERSION = 21;
+  const APP_VERSION = 22;
   const CIRC = 326.7;
 
   const PAGE_META = {
@@ -396,11 +396,11 @@
     }
   }
 
-  async function loginAndSync() {
+  async function loginAndSync(opts = {}) {
     try {
-      toast("ログイン画面を開きます…");
+      toast(opts.forceReLogin ? "別アカウントでログインします…" : "ログイン画面を開きます…");
       await CloudSync.init();
-      await CloudSync.ensureSignedIn();
+      await CloudSync.ensureSignedIn(opts);
       const name = await CloudSync.getAccountLabel?.();
       toast(name ? `ログインしました（${name}）` : "ログインしました");
       if (!currentSyncId() && !data.sync.preferRemoteOnce) {
@@ -412,6 +412,18 @@
       toast(e?.message || "ログインに失敗しました。ポップアップを許可してください");
       renderSyncSettings();
     }
+  }
+
+  async function logoutCloud() {
+    CloudSync.signOut?.();
+    CloudSync.stopWatch?.();
+    if (data.sync) {
+      data.sync.lastSyncStatus = "idle";
+      data.sync.lastSyncMessage = "ログアウトしました";
+    }
+    persistLocalOnly();
+    toast("ログアウトしました。両端末で同じアカウント名になるよう、再度ログインしてください");
+    renderSyncSettings();
   }
 
   function updatePairQr() {
@@ -496,13 +508,20 @@
 
     const authEl = $("#syncAuthStatus");
     if (authEl) {
-      authEl.textContent = signedIn
-        ? `ログイン中: ${account || "OK"}`
-        : "未ログイン（同期するにはログインが必要）";
-      authEl.className = "sync-auth " + (signedIn ? "sync-auth-ok" : "sync-auth-warn");
+      if (signedIn) {
+        authEl.innerHTML =
+          `この端末のアカウント: <strong id="syncAccountName">${escapeHtml(account || "OK")}</strong>` +
+          `<br><span class="sync-auth-note">PCとスマホでこの名前が<strong>一字一句同じ</strong>である必要があります。違う場合は同期できません。</span>`;
+        authEl.className = "sync-auth sync-auth-ok";
+      } else {
+        authEl.textContent = "未ログイン（同期するにはログインが必要）";
+        authEl.className = "sync-auth sync-auth-warn";
+      }
     }
     const loginBtn = $("#syncLoginBtn");
-    if (loginBtn) loginBtn.textContent = signedIn ? "別アカウントでログイン" : "クラウドにログイン";
+    if (loginBtn) loginBtn.textContent = signedIn ? "別アカウントでログインし直す" : "クラウドにログイン";
+    const logoutBtn = $("#syncLogoutBtn");
+    if (logoutBtn) logoutBtn.hidden = !signedIn;
 
     const labels = { idle: "待機中", pending: "送信待ち", syncing: "同期中", ok: "自動同期中", error: "エラー" };
     const via = CloudSync.getStatusLabel?.() || provider || "";
@@ -528,7 +547,7 @@
     const hint = $("#syncAutoHint");
     if (hint) {
       hint.innerHTML =
-        "<strong>重要:</strong> PCとスマホで<strong>同じ無料アカウント</strong>にログインしてください。①スマホで「クラウドにログイン」→「共有リンクをコピー」②PCでリンクを開き「ログインして取り込む」。";
+        "<strong>アカウント名が違うと同期できません。</strong>①データがある<strong>スマホ</strong>のアカウント名を控える ②<strong>PC</strong>でログアウト→「別アカウントでログインし直す」でスマホと同じアカウントに入る ③共有リンクで取り込む。";
     }
     updatePairQr();
     renderSyncBanner();
@@ -3078,7 +3097,11 @@
     $("#notifBtn").addEventListener("click", showFocusAlert);
     $("#checkUpdateBtn")?.addEventListener("click", () => checkForAppUpdate(true));
     $("#forceUpdateBtn")?.addEventListener("click", forceClearCacheAndReload);
-    $("#syncLoginBtn")?.addEventListener("click", () => loginAndSync());
+    $("#syncLoginBtn")?.addEventListener("click", () => {
+      const already = !!CloudSync.isSignedIn?.();
+      loginAndSync({ forceReLogin: already });
+    });
+    $("#syncLogoutBtn")?.addEventListener("click", () => logoutCloud());
     $("#syncEnabled")?.addEventListener("change", saveSyncSettings);
     $("#saveSyncBtn")?.addEventListener("click", saveSyncSettings);
     $("#syncNowBtn")?.addEventListener("click", async () => {

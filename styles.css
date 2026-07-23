@@ -1664,9 +1664,12 @@ textarea.input { min-height: 80px; resize: vertical; }
   background: #f0fdf4;
   color: var(--success, #15803d);
 }
-.sync-auth-warn {
-  background: #fffbeb;
-  color: #92400e;
+.sync-auth-note {
+  display: inline-block;
+  margin-top: 6px;
+  font-size: 0.82rem;
+  line-height: 1.4;
+  opacity: 0.95;
 }
 
 .sync-pair-banner {

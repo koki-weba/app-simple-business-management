@@ -142,15 +142,28 @@ window.CloudSync = (() => {
   }
 
   /** ボタン操作からのみ呼ぶ（ポップアップ制限のため） */
-  async function ensureSignedIn() {
+  async function ensureSignedIn(opts = {}) {
     if (isFirebaseConfigured() && providerName === "firebase") return true;
     await waitForPuter();
     if (!isPuterReady()) throw new Error("同期サービスを読み込めませんでした");
-    if (puter.auth?.isSignedIn?.()) return true;
+    if (opts.forceReLogin && puter.auth?.isSignedIn?.()) {
+      try {
+        puter.auth.signOut();
+      } catch (_) {}
+    }
+    if (puter.auth?.isSignedIn?.() && !opts.forceReLogin) return true;
     if (!puter.auth?.signIn) throw new Error("ログイン機能が利用できません");
     await puter.auth.signIn();
     if (!puter.auth.isSignedIn()) throw new Error("ログインがキャンセルされました");
     return true;
+  }
+
+  function signOut() {
+    try {
+      if (isPuterReady() && puter.auth?.signOut) puter.auth.signOut();
+    } catch (e) {
+      console.error("signOut failed", e);
+    }
   }
 
   async function getAccountLabel() {
@@ -352,6 +365,7 @@ window.CloudSync = (() => {
     isPuterReady,
     isSignedIn,
     ensureSignedIn,
+    signOut,
     getAccountLabel,
     getProvider,
     getProviderName: () => providerName || getProvider(),
