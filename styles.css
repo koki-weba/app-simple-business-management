@@ -1669,6 +1669,19 @@ textarea.input { min-height: 80px; resize: vertical; }
   color: #92400e;
 }
 
+.sync-pair-banner {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px 12px;
+  margin: 0 0 12px;
+  padding: 12px 14px;
+  border-radius: 12px;
+  background: #fffbeb;
+  color: #92400e;
+  border: 1px solid #fcd34d;
+}
+
 .sync-pair-banner p {
   margin: 0;
   flex: 1 1 180px;
