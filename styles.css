@@ -1640,6 +1640,40 @@ textarea.input { min-height: 80px; resize: vertical; }
   border-top: 1px solid var(--border, #e5e7eb);
 }
 
+.sync-qr-wrap {
+  margin-top: 12px;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 8px;
+}
+
+.sync-qr {
+  border-radius: 12px;
+  background: #fff;
+  border: 1px solid var(--border, #e5e7eb);
+}
+
+.sync-pair-banner {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px 12px;
+  margin: 0 0 12px;
+  padding: 12px 14px;
+  border-radius: 12px;
+  background: #fffbeb;
+  color: #92400e;
+  border: 1px solid #fcd34d;
+}
+
+.sync-pair-banner p {
+  margin: 0;
+  flex: 1 1 180px;
+  font-size: 0.9rem;
+  line-height: 1.4;
+}
+
 .sync-help {
   margin-top: 12px;
   font-size: 0.8rem;

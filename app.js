@@ -4,7 +4,7 @@
 
   const D = window.StartupDefaults;
   const STORAGE_KEY = D.STORAGE_KEY;
-  const APP_VERSION = 17;
+  const APP_VERSION = 18;
   const CIRC = 326.7;
 
   const PAGE_META = {
@@ -108,8 +108,10 @@
     }
     ensureMeta();
     if (!data.sync) data.sync = {};
-    // 自動同期を既定オン（オフにした履歴がなければ）
     if (data.sync.autoOptOut !== true) data.sync.enabled = true;
+    const storedId = window.CloudSync?.loadStoredSyncId?.() || "";
+    if (!data.sync.syncId && storedId) data.sync.syncId = storedId;
+    if (data.sync.syncId) CloudSync.storeSyncId?.(data.sync.syncId);
     try {
       localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
     } catch (_) {}
@@ -155,17 +157,37 @@
     return contentSignal(d) === 0;
   }
 
+  function rememberSyncId(id) {
+    if (!data.sync) data.sync = {};
+    data.sync.syncId = id || "";
+    CloudSync.storeSyncId?.(id || "");
+  }
+
+  function currentSyncId() {
+    return (data.sync?.syncId || CloudSync.loadStoredSyncId?.() || "").trim();
+  }
+
+  function pairUrlFor(id) {
+    const url = new URL(window.location.href);
+    url.search = "";
+    url.hash = "";
+    url.searchParams.set("sync", id);
+    return url.toString();
+  }
+
   function scheduleCloudPush() {
     if (
       cloudPushPaused ||
       !data.sync?.enabled ||
+      data.sync?.autoOptOut === true ||
       !window.CloudSync?.isConfigured?.()
     ) {
       return;
     }
     const provider = CloudSync.getProviderName?.() || CloudSync.getProvider?.();
-    if (provider === "firebase" && !data.sync.syncId) return;
-    CloudSync.schedulePush(data.sync.syncId || "", () => JSON.parse(JSON.stringify(data)));
+    const syncId = currentSyncId();
+    if (provider === "firebase" && !syncId) return;
+    CloudSync.schedulePush(syncId, () => JSON.parse(JSON.stringify(data)));
     data.sync.lastSyncStatus = "pending";
   }
 
@@ -201,22 +223,23 @@
         ...prevSync,
         ...(remotePayload.sync || {}),
         enabled: prevSync.enabled !== false,
-        syncId: prevSync.syncId || remotePayload.sync?.syncId || "",
+        syncId: prevSync.syncId || remotePayload.sync?.syncId || currentSyncId(),
         autoOptOut: prevSync.autoOptOut,
         lastSyncAt: new Date().toISOString(),
         lastSyncStatus: "ok",
         lastSyncMessage: "他端末から取り込み",
       };
       ensureMeta();
-      // リモートの時刻を維持（起動時にローカルを新しく見せない）
       data._meta.updatedAt = remotePayload._meta?.updatedAt || data._meta.updatedAt;
       data._meta.updatedAtMs = remoteMs || data._meta.updatedAtMs;
       data._meta.revision = remoteRev || data._meta.revision;
       data._meta.deviceId = CloudSync.getDeviceId();
+      rememberSyncId(data.sync.syncId);
       cloudPushPaused = true;
       persistLocalOnly();
       cloudPushPaused = false;
       if (!silent) toast("他の端末の内容を反映しました");
+      if (!data.sync.pairAcknowledged) data.sync.pairAcknowledged = true;
       renderAll();
       return true;
     } finally {
@@ -232,11 +255,15 @@
       if (!data.sync) data.sync = {};
       data.sync.enabled = true;
       data.sync.autoOptOut = false;
-      data.sync.syncId = pair;
+      rememberSyncId(pair);
+      data.sync.pairedAt = new Date().toISOString();
+      data.sync.pairAcknowledged = true;
       url.searchParams.delete("sync");
       url.searchParams.delete("pair");
-      window.history.replaceState({}, "", url.pathname + url.search + url.hash);
+      const qs = url.searchParams.toString();
+      window.history.replaceState({}, "", url.pathname + (qs ? "?" + qs : "") + url.hash);
       persistLocalOnly();
+      toast("他の端末と接続しました。以降は自動同期されます");
       return true;
     } catch {
       return false;
@@ -252,23 +279,16 @@
     data.sync.enabled = true;
     data.sync.autoOptOut = false;
 
-    if (!CloudSync.isConfigured()) {
-      if (showToast) toast("同期サービスを読み込み中です。数秒後にもう一度お試しください");
-      return;
-    }
-
     data.sync.lastSyncStatus = "syncing";
     renderSyncSettings();
     try {
       await CloudSync.init();
-      const provider = CloudSync.getProviderName();
-      if (provider === "firebase" && !data.sync.syncId) {
-        data.sync.syncId = CloudSync.generateSyncId();
-      }
-      const remote = await CloudSync.pull(data.sync.syncId || "");
+      let syncId = currentSyncId();
+      const remote = syncId ? await CloudSync.pull(syncId) : null;
       if (!remote) {
-        await CloudSync.push(data.sync.syncId || "", JSON.parse(JSON.stringify(data)));
-        data.sync.lastSyncMessage = "クラウドへ初回保存";
+        const newId = await CloudSync.push(syncId || "", JSON.parse(JSON.stringify(data)));
+        rememberSyncId(newId);
+        data.sync.lastSyncMessage = syncId ? "クラウドへ保存" : "クラウド部屋を作成";
         if (showToast) toast("この端末のデータをクラウドに保存しました");
       } else {
         const applied = await applyRemoteCloud(remote, true);
@@ -276,7 +296,8 @@
           const localMs = localUpdatedMs();
           const remoteMs = remoteUpdatedMs(remote);
           if (localMs > remoteMs || (isEffectivelyEmpty(remote.payload) && !isEffectivelyEmpty(data))) {
-            await CloudSync.push(data.sync.syncId || "", JSON.parse(JSON.stringify(data)));
+            const newId = await CloudSync.push(syncId, JSON.parse(JSON.stringify(data)));
+            rememberSyncId(newId || syncId);
             data.sync.lastSyncMessage = "この端末が最新のため送信";
             if (showToast) toast("この端末の内容をクラウドへ送りました");
           } else {
@@ -289,70 +310,106 @@
       }
       data.sync.lastSyncAt = new Date().toISOString();
       data.sync.lastSyncStatus = "ok";
-      CloudSync.startWatch(data.sync.syncId || "");
+      if (!data.sync.pairedAt && currentSyncId()) data.sync.pairedAt = data.sync.lastSyncAt;
+      CloudSync.startWatch(currentSyncId());
       cloudPushPaused = true;
       persistLocalOnly();
       cloudPushPaused = false;
     } catch (e) {
       data.sync.lastSyncStatus = "error";
       data.sync.lastSyncMessage = e.message || "同期エラー";
-      if (showToast) toast("同期に失敗しました（ログインが必要な場合があります）");
+      if (showToast) toast("同期に失敗しました。ネット接続を確認してください");
     }
     renderSyncSettings();
+    renderSyncBanner();
+  }
+
+  function updatePairQr() {
+    const img = $("#syncQrImg");
+    const id = currentSyncId();
+    if (!img) return;
+    if (!id) {
+      img.hidden = true;
+      img.removeAttribute("src");
+      return;
+    }
+    const link = pairUrlFor(id);
+    img.hidden = false;
+    img.alt = "同期用QRコード";
+    img.src =
+      "https://api.qrserver.com/v1/create-qr-code/?size=160x160&margin=8&data=" +
+      encodeURIComponent(link);
+  }
+
+  function renderSyncBanner() {
+    const el = $("#syncPairBanner");
+    if (!el || !data?.sync) return;
+    const offline = data.sync.autoOptOut === true || data.sync.enabled === false;
+    const err = data.sync.lastSyncStatus === "error";
+    const hasId = !!currentSyncId();
+    const needsHint = !data.sync.pairAcknowledged;
+    if (offline || (!err && hasId && !needsHint)) {
+      el.hidden = true;
+      return;
+    }
+    el.hidden = false;
+    const msg = $("#syncPairBannerMsg");
+    if (err) {
+      if (msg) msg.textContent = "同期エラーです。設定から状態を確認してください。";
+    } else if (!hasId) {
+      if (msg) msg.textContent = "同期の準備中です。少し待つか、設定を開いてください。";
+    } else {
+      if (msg)
+        msg.textContent =
+          "PCとスマホをつなぐには、設定で「共有リンクをコピー」してもう一方の端末で開いてください（初回のみ）。";
+    }
   }
 
   function renderSyncSettings() {
     const statusEl = $("#syncStatusText");
     if (!statusEl || !data.sync) return;
     const provider = CloudSync.getProviderName?.() || CloudSync.getProvider?.();
-    const firebaseExtras = $("#syncFirebaseExtras");
-    if (firebaseExtras) firebaseExtras.hidden = provider !== "firebase";
 
-    if (!CloudSync.isConfigured()) {
-      statusEl.textContent = "同期準備中… ネット接続を確認するか、ページを再読み込みしてください";
-      statusEl.className = "sync-status sync-warn";
-    } else {
-      const labels = { idle: "待機中", pending: "送信待ち", syncing: "同期中", ok: "同期済み", error: "エラー" };
-      const via = CloudSync.getStatusLabel?.() || provider || "";
-      let text = (labels[data.sync.lastSyncStatus] || data.sync.lastSyncStatus) + (via ? ` · ${via}` : "");
-      if (data.sync.lastSyncMessage) text += " — " + data.sync.lastSyncMessage;
-      if (data.sync.lastSyncAt) text += "（" + data.sync.lastSyncAt.slice(0, 16).replace("T", " ") + "）";
-      statusEl.textContent = text;
-      statusEl.className =
-        "sync-status " +
-        (data.sync.lastSyncStatus === "error" ? "sync-error" : data.sync.lastSyncStatus === "ok" ? "sync-ok" : "");
-    }
+    const labels = { idle: "待機中", pending: "送信待ち", syncing: "同期中", ok: "自動同期中", error: "エラー" };
+    const via = CloudSync.getStatusLabel?.() || provider || "";
+    let text = (labels[data.sync.lastSyncStatus] || data.sync.lastSyncStatus) + (via ? ` · ${via}` : "");
+    if (data.sync.lastSyncMessage) text += " — " + data.sync.lastSyncMessage;
+    if (data.sync.lastSyncAt) text += "（" + data.sync.lastSyncAt.slice(0, 16).replace("T", " ") + "）";
+    statusEl.textContent = text;
+    statusEl.className =
+      "sync-status " +
+      (data.sync.lastSyncStatus === "error"
+        ? "sync-error"
+        : data.sync.lastSyncStatus === "ok"
+          ? "sync-ok"
+          : data.sync.lastSyncStatus === "pending" || data.sync.lastSyncStatus === "syncing"
+            ? "sync-warn"
+            : "");
+
     const idInput = $("#syncIdInput");
-    if (idInput && document.activeElement !== idInput) idInput.value = data.sync.syncId || "";
+    if (idInput && document.activeElement !== idInput) idInput.value = currentSyncId();
     const en = $("#syncEnabled");
     if (en) en.checked = data.sync.enabled !== false && data.sync.autoOptOut !== true;
 
     const hint = $("#syncAutoHint");
     if (hint) {
-      if (provider === "puter") {
-        hint.textContent =
-          "PCとスマホで同じクラウドアカウントにログインすれば、以降は自動で同期されます（初回のみログイン画面が出ます）。";
-      } else if (provider === "firebase") {
-        hint.textContent =
-          "Firebase同期中。同じ同期IDを両端末で使うか、共有リンクで接続してください。";
-      } else {
-        hint.textContent = "同期ライブラリ読み込み後、自動で接続を試します。";
-      }
+      hint.innerHTML =
+        "<strong>最初に一度だけ</strong>、下の共有リンクをもう一方の端末で開いてください。以降は保存のたびに自動同期されます（週次SNS・営業記録も含みます）。";
     }
+    updatePairQr();
+    renderSyncBanner();
   }
 
   function saveSyncSettings() {
     if (!window.CloudSync) return;
     const enabled = !!$("#syncEnabled")?.checked;
     let syncId = ($("#syncIdInput")?.value || "").trim();
-    const provider = CloudSync.getProvider?.();
-    if (enabled && provider === "firebase" && !syncId) syncId = CloudSync.generateSyncId();
     data.sync.enabled = enabled;
     data.sync.autoOptOut = !enabled;
-    data.sync.syncId = syncId;
-    if ($("#syncIdInput")) $("#syncIdInput").value = syncId;
+    if (syncId) rememberSyncId(syncId);
+    if ($("#syncIdInput")) $("#syncIdInput").value = currentSyncId();
     persistLocalOnly();
-    if (enabled && CloudSync.isConfigured()) {
+    if (enabled) {
       syncPullNow(false);
     } else {
       CloudSync.stopWatch?.();
@@ -362,27 +419,44 @@
   }
 
   function copySyncId() {
-    const id = data.sync?.syncId || $("#syncIdInput")?.value;
-    if (!id) return toast("同期IDがありません");
+    const id = currentSyncId() || $("#syncIdInput")?.value;
+    if (!id) return toast("先に同期を開始してIDを発行してください");
     navigator.clipboard?.writeText(id).then(
       () => toast("同期IDをコピーしました"),
       () => toast("コピーに失敗しました")
     );
   }
 
-  function copyPairLink() {
-    const id = data.sync?.syncId || CloudSync.generateSyncId();
-    if (!data.sync.syncId) {
-      data.sync.syncId = id;
+  async function copyPairLink() {
+    try {
+      if (!currentSyncId()) {
+        toast("共有リンクを準備しています…");
+        await syncPullNow(false);
+      }
+      const id = currentSyncId();
+      if (!id) return toast("同期IDを作れませんでした。ネット接続を確認してください");
+      const link = pairUrlFor(id);
+      await navigator.clipboard?.writeText(link);
+      data.sync.pairAcknowledged = true;
       persistLocalOnly();
+      toast("共有リンクをコピーしました。他端末で開いてください");
       renderSyncSettings();
+    } catch {
+      toast("コピーに失敗しました");
     }
-    const url = new URL(window.location.href);
-    url.searchParams.set("sync", id);
-    navigator.clipboard?.writeText(url.toString()).then(
-      () => toast("共有リンクをコピーしました。他端末で開いてください"),
-      () => toast("コピーに失敗しました")
-    );
+  }
+
+  async function resetSyncRoom() {
+    if (!confirm("新しい同期部屋を作りますか？今のIDでは他端末とつながらなくなります。")) return;
+    rememberSyncId("");
+    try {
+      localStorage.removeItem("startupRoadmap_syncId_v1");
+    } catch (_) {}
+    data.sync.syncId = "";
+    data.sync.pairedAt = null;
+    data.sync.lastSyncStatus = "idle";
+    persistLocalOnly();
+    await syncPullNow(true);
   }
 
   async function bootstrapCloud() {
@@ -390,9 +464,13 @@
       if (ev.type === "remote") applyRemoteCloud(ev.data, false);
       if (ev.type === "pushed") {
         if (!data.sync) data.sync = {};
+        if (ev.syncId) rememberSyncId(ev.syncId);
         data.sync.lastSyncStatus = "ok";
         data.sync.lastSyncAt = new Date().toISOString();
-        data.sync.lastSyncMessage = "クラウドへ送信";
+        data.sync.lastSyncMessage = "クラウドへ自動送信";
+        cloudPushPaused = true;
+        persistLocalOnly();
+        cloudPushPaused = false;
         renderSyncSettings();
       }
       if (ev.type === "error") {
@@ -403,13 +481,7 @@
       }
     });
     consumePairFromUrl();
-    if (data.sync?.autoOptOut === true) return;
-
-    // Puter CDN 読み込み待ち
-    for (let i = 0; i < 25 && !CloudSync.isConfigured(); i++) {
-      await new Promise((r) => setTimeout(r, 200));
-    }
-    if (!CloudSync.isConfigured()) {
+    if (data.sync?.autoOptOut === true) {
       renderSyncSettings();
       return;
     }
@@ -1352,6 +1424,7 @@
 
     renderPhaseStrip(phaseId);
     renderMilestonePreview();
+    renderSyncBanner();
   }
 
   function renderPhaseStrip(activeId) {
@@ -2851,10 +2924,15 @@
     $("#syncNowBtn")?.addEventListener("click", () => syncPullNow(true));
     $("#copySyncIdBtn")?.addEventListener("click", copySyncId);
     $("#copyPairLinkBtn")?.addEventListener("click", copyPairLink);
-    $("#newSyncIdBtn")?.addEventListener("click", () => {
-      if (!confirm("新しい同期IDを発行しますか？別のIDは別データになります。")) return;
-      $("#syncIdInput").value = CloudSync.generateSyncId();
-      saveSyncSettings();
+    $("#openSyncSettingsBtn")?.addEventListener("click", () => switchView("settings"));
+    $("#newSyncIdBtn")?.addEventListener("click", () => resetSyncRoom());
+    $("#syncIdInput")?.addEventListener("change", () => {
+      const v = ($("#syncIdInput")?.value || "").trim();
+      if (v) {
+        rememberSyncId(v);
+        persistLocalOnly();
+        syncPullNow(true);
+      }
     });
 
     $$("#chartRangeSeg .seg-btn").forEach((btn) => {

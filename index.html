@@ -14,7 +14,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=DM+Sans:ital,opsz,wght@0,9..40,400;0,9..40,500;0,9..40,600;0,9..40,700;1,9..40,400&family=Noto+Sans+JP:wght@400;500;600;700&display=swap" rel="stylesheet" />
-  <link rel="stylesheet" href="styles.css?v=17" />
+  <link rel="stylesheet" href="styles.css?v=18" />
   <title>起業ロードマップ | Startup Roadmap</title>
 </head>
 <body>
@@ -47,6 +47,10 @@
     <main class="app-main" id="appMain">
       <!-- HOME -->
       <section class="view view-home active" data-view="home">
+        <div class="sync-pair-banner" id="syncPairBanner" hidden>
+          <p id="syncPairBannerMsg">他端末とまだつながっていません。設定で共有リンクを送ってください。</p>
+          <button type="button" class="btn btn-primary btn-sm" id="openSyncSettingsBtn">設定を開く</button>
+        </div>
         <div class="card hero-card animate-in">
           <div class="hero-grid">
             <div class="hero-copy">
@@ -326,7 +330,7 @@
         <div class="card animate-in">
           <h3>アプリの更新</h3>
           <p class="muted small">「最新版を確認」はサーバー上のバージョンと照合します。反映されない場合は「キャッシュを消去」を押してください（データは残ります）。</p>
-          <p class="version-line">この端末: <strong id="appVersionLabel">v17</strong>　／　サーバー: <strong id="serverVersionLabel">未確認</strong></p>
+          <p class="version-line">この端末: <strong id="appVersionLabel">v18</strong>　／　サーバー: <strong id="serverVersionLabel">未確認</strong></p>
           <div class="btn-row">
             <button type="button" class="btn btn-primary" id="checkUpdateBtn">最新版を確認</button>
             <button type="button" class="btn btn-ghost" id="forceUpdateBtn">キャッシュを消去</button>
@@ -335,39 +339,39 @@
         <div class="card animate-in">
           <h3>自動同期（スマホ・PC）</h3>
           <p class="muted small" id="syncAutoHint">
-            PCとスマホで同じクラウドアカウントにログインすると、記録が自動で揃います。変更は約1秒後にクラウドへ送られ、他端末は開いているとき／数秒以内に反映されます。
+            <strong>最初に一度だけ</strong>、下の共有リンクをもう一方の端末で開いてください。以降は保存のたびに自動同期されます（週次SNS・営業記録も含みます）。
           </p>
           <label class="sync-toggle">
             <input type="checkbox" id="syncEnabled" checked />
             自動同期をオンにする
           </label>
+          <label class="field">
+            <span>同期ID（両端末で同じ）</span>
+            <div class="sync-id-row">
+              <input type="text" id="syncIdInput" class="input" placeholder="自動発行／共有リンクで設定" autocomplete="off" />
+              <button type="button" class="btn btn-ghost btn-sm" id="copySyncIdBtn">コピー</button>
+            </div>
+          </label>
           <div class="btn-row">
-            <button type="button" class="btn btn-primary" id="syncNowBtn">今すぐ同期</button>
-            <button type="button" class="btn btn-ghost" id="saveSyncBtn">設定を保存</button>
+            <button type="button" class="btn btn-primary" id="copyPairLinkBtn">共有リンクをコピー</button>
+            <button type="button" class="btn btn-ghost btn-sm" id="newSyncIdBtn">新しい部屋を作成</button>
+          </div>
+          <div class="sync-qr-wrap">
+            <img id="syncQrImg" class="sync-qr" alt="" hidden width="160" height="160" />
+            <p class="muted small">スマホでQRを読み取り、同じアプリとして開いても接続できます。</p>
           </div>
           <p class="sync-status" id="syncStatusText">—</p>
-          <div id="syncFirebaseExtras" hidden>
-            <label class="field">
-              <span>同期ID（Firebase利用時・両端末で同じ）</span>
-              <div class="sync-id-row">
-                <input type="text" id="syncIdInput" class="input" placeholder="自動発行されます" autocomplete="off" />
-                <button type="button" class="btn btn-ghost btn-sm" id="copySyncIdBtn">コピー</button>
-              </div>
-            </label>
-            <div class="btn-row">
-              <button type="button" class="btn btn-ghost btn-sm" id="copyPairLinkBtn">共有リンクをコピー</button>
-              <button type="button" class="btn btn-ghost btn-sm sync-new-id" id="newSyncIdBtn">新しい同期ID</button>
-            </div>
-            <details class="sync-help">
-              <summary>Firebase を使う場合（任意）</summary>
-              <ol>
-                <li><a href="https://console.firebase.google.com/" target="_blank" rel="noopener">Firebase Console</a>でプロジェクト作成</li>
-                <li>Firestore Database を作成</li>
-                <li>ウェブアプリを追加し、設定値を <code>firebase-config.js</code> に貼り付け</li>
-                <li><code>enabled: true</code> に変更</li>
-              </ol>
-            </details>
-          </div>
+          <details class="sync-help">
+            <summary>うまくいかないとき</summary>
+            <ol>
+              <li>データがある端末で「共有リンクをコピー」</li>
+              <li>もう一方の端末でそのリンクを開く</li>
+              <li>両方とも同じGitHub PagesのURLを使う（localhostと本番は別扱い）</li>
+              <li>必要なら下の「再同期」を押す</li>
+            </ol>
+            <button type="button" class="btn btn-ghost btn-sm" id="syncNowBtn">再同期（予備）</button>
+            <button type="button" class="btn btn-ghost btn-sm" id="saveSyncBtn" hidden>設定を保存</button>
+          </details>
         </div>
         <div class="card animate-in">
           <h3>データ管理</h3>
@@ -401,7 +405,7 @@
           <p>スマホで「ホーム画面に追加」するとアプリのように使えます。</p>
           <button type="button" class="btn btn-primary btn-block" id="installBtn">インストール</button>
         </div>
-        <p class="version-tag">起業ロードマップ v17</p>
+        <p class="version-tag">起業ロードマップ v18</p>
       </section>
     </main>
 
@@ -459,13 +463,12 @@
     <button type="button" class="toast-undo" id="toastUndoBtn" hidden>元に戻す</button>
   </div>
 
-  <script src="https://js.puter.com/v2/"></script>
   <script src="https://www.gstatic.com/firebasejs/10.14.0/firebase-app-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.14.0/firebase-firestore-compat.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
-  <script src="firebase-config.js?v=17"></script>
-  <script src="sync.js?v=17"></script>
-  <script src="defaults.js?v=17"></script>
-  <script src="app.js?v=17"></script>
+  <script src="firebase-config.js?v=18"></script>
+  <script src="sync.js?v=18"></script>
+  <script src="defaults.js?v=18"></script>
+  <script src="app.js?v=18"></script>
 </body>
 </html>

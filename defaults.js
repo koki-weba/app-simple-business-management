@@ -460,6 +460,8 @@
         enabled: true,
         autoOptOut: false,
         syncId: "",
+        pairAcknowledged: false,
+        pairedAt: null,
         lastSyncAt: null,
         lastSyncStatus: "idle",
         lastSyncMessage: "",
